@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ivy's Recipes - Save, organize, and find your favorite recipes">
+    <meta name="theme-color" content="#e07a5f">
+    <title>Ivy's Recipes</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">Ivy's Recipes</h1>
+                <nav class="nav-actions">
+                    <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
+                    <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="19" cy="12" r="1"></circle>
+                            <circle cx="5" cy="12" r="1"></circle>
+                        </svg>
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Search and Filter Bar -->
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search recipes..." autocomplete="off">
+                <button id="btn-clear-search" class="btn-clear" aria-label="Clear search" hidden>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6 6 18M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tags Filter -->
+        <div class="tags-filter" id="tags-filter">
+            <button class="tag-chip active" data-tag="all">All Recipes</button>
+        </div>
+
+        <!-- Recipe Grid -->
+        <main class="main-content">
+            <div id="recipe-grid" class="recipe-grid">
+                <!-- Recipes will be inserted here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="empty-state" hidden>
+                <div class="empty-state-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                    </svg>
+                </div>
+                <h2>No recipes yet</h2>
+                <p>Start building your collection by adding your first recipe!</p>
+                <button class="btn btn-primary" id="btn-add-first">+ Add Your First Recipe</button>
+            </div>
+
+            <!-- No Results State -->
+            <div id="no-results" class="empty-state" hidden>
+                <div class="empty-state-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </div>
+                <h2>No recipes found</h2>
+                <p>Try a different search term or filter</p>
+            </div>
+        </main>
+
+        <!-- Dropdown Menu -->
+        <div id="dropdown-menu" class="dropdown-menu" hidden>
+            <button id="btn-import" class="dropdown-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Import Recipes
+            </button>
+            <button id="btn-export" class="dropdown-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Export Recipes
+            </button>
+            <hr class="dropdown-divider">
+            <button id="btn-bookmarklet" class="dropdown-item">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Get Bookmarklet
+            </button>
+            <button id="btn-install" class="dropdown-item" hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <line x1="12" y1="18" x2="12" y2="18"></line>
+                </svg>
+                Install App
+            </button>
+        </div>
+
+        <!-- Add/Edit Recipe Modal -->
+        <div id="modal-recipe" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Add Recipe</h2>
+                    <button class="btn btn-icon modal-close" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6 6 18M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- URL Import Section -->
+                    <div class="url-import-section">
+                        <label for="recipe-url">Import from URL</label>
+                        <div class="url-input-wrapper">
+                            <input type="url" id="recipe-url" placeholder="Paste recipe URL here...">
+                            <button id="btn-fetch-url" class="btn btn-secondary">Fetch</button>
+                        </div>
+                        <p class="help-text">Paste a recipe URL and we'll try to extract the details automatically</p>
+                    </div>
+
+                    <div class="divider">
+                        <span>or enter manually</span>
+                    </div>
+
+                    <form id="recipe-form">
+                        <input type="hidden" id="recipe-id">
+
+                        <div class="form-group">
+                            <label for="recipe-title">Recipe Title *</label>
+                            <input type="text" id="recipe-title" required placeholder="e.g., Grandma's Apple Pie">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-image">Image URL</label>
+                            <input type="url" id="recipe-image" placeholder="https://...">
+                            <div id="image-preview" class="image-preview" hidden></div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="recipe-servings">Servings</label>
+                                <input type="text" id="recipe-servings" placeholder="e.g., 4">
+                            </div>
+                            <div class="form-group">
+                                <label for="recipe-prep-time">Prep Time</label>
+                                <input type="text" id="recipe-prep-time" placeholder="e.g., 15 mins">
+                            </div>
+                            <div class="form-group">
+                                <label for="recipe-cook-time">Cook Time</label>
+                                <input type="text" id="recipe-cook-time" placeholder="e.g., 30 mins">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-tags">Tags</label>
+                            <input type="text" id="recipe-tags" placeholder="e.g., vegan, quick, summer (comma separated)">
+                            <div class="suggested-tags">
+                                <span class="suggested-label">Suggestions:</span>
+                                <button type="button" class="tag-suggestion" data-tag="Quick">Quick</button>
+                                <button type="button" class="tag-suggestion" data-tag="Vegan">Vegan</button>
+                                <button type="button" class="tag-suggestion" data-tag="Vegetarian">Vegetarian</button>
+                                <button type="button" class="tag-suggestion" data-tag="Instant Pot">Instant Pot</button>
+                                <button type="button" class="tag-suggestion" data-tag="Summer">Summer</button>
+                                <button type="button" class="tag-suggestion" data-tag="Comfort Food">Comfort Food</button>
+                                <button type="button" class="tag-suggestion" data-tag="Dessert">Dessert</button>
+                                <button type="button" class="tag-suggestion" data-tag="Breakfast">Breakfast</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-ingredients">Ingredients *</label>
+                            <textarea id="recipe-ingredients" rows="6" required placeholder="Enter each ingredient on a new line, e.g.:
+2 cups flour
+1 cup sugar
+3 eggs"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-instructions">Instructions *</label>
+                            <textarea id="recipe-instructions" rows="8" required placeholder="Enter step-by-step instructions..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-notes">Notes</label>
+                            <textarea id="recipe-notes" rows="3" placeholder="Any additional notes, tips, or variations..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recipe-source">Source URL</label>
+                            <input type="url" id="recipe-source" placeholder="Original recipe link">
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Recipe</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Recipe Modal -->
+        <div id="modal-view" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-view-content">
+                <div class="modal-header">
+                    <h2 id="view-title">Recipe Title</h2>
+                    <div class="modal-actions">
+                        <button id="btn-edit-recipe" class="btn btn-icon" aria-label="Edit">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <button id="btn-delete-recipe" class="btn btn-icon btn-danger" aria-label="Delete">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon modal-close" aria-label="Close">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div id="view-image" class="view-image" hidden></div>
+                    <div class="view-meta" id="view-meta"></div>
+                    <div class="view-tags" id="view-tags"></div>
+
+                    <div class="view-section">
+                        <h3>Ingredients</h3>
+                        <ul id="view-ingredients" class="ingredients-list"></ul>
+                    </div>
+
+                    <div class="view-section">
+                        <h3>Instructions</h3>
+                        <div id="view-instructions" class="instructions"></div>
+                    </div>
+
+                    <div class="view-section" id="view-notes-section" hidden>
+                        <h3>Notes</h3>
+                        <p id="view-notes"></p>
+                    </div>
+
+                    <div class="view-source" id="view-source-section" hidden>
+                        <a id="view-source" href="#" target="_blank" rel="noopener">View Original Recipe</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bookmarklet Modal -->
+        <div id="modal-bookmarklet" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h2>Save Recipe Bookmarklet</h2>
+                    <button class="btn btn-icon modal-close" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6 6 18M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>Drag this button to your bookmarks bar:</p>
+                    <div class="bookmarklet-container">
+                        <a id="bookmarklet-link" class="bookmarklet-btn" href="#">Save to Ivy's Recipes</a>
+                    </div>
+                    <div class="bookmarklet-instructions">
+                        <h4>How to use:</h4>
+                        <ol>
+                            <li>Drag the button above to your browser's bookmarks bar</li>
+                            <li>When you find a recipe you like, click the bookmark</li>
+                            <li>The recipe will open in Ivy's Recipes ready to save</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast" hidden>
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
+    <input type="file" id="import-file" accept=".json" hidden>
+
+    <script src="app.js"></script>
+</body>
+</html>
