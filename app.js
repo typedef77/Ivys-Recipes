@@ -955,10 +955,21 @@
 
     function checkUrlParams() {
         const params = new URLSearchParams(window.location.search);
-        const url = params.get('url');
+        let url = params.get('url');
+        const text = params.get('text');
+        const title = params.get('title');
+
+        // Some apps share the URL in the 'text' field
+        if (!url && text) {
+            // Try to extract URL from text
+            const urlMatch = text.match(/https?:\/\/[^\s]+/);
+            if (urlMatch) {
+                url = urlMatch[0];
+            }
+        }
 
         if (url) {
-            // Clear the URL parameter
+            // Clear the URL parameters
             window.history.replaceState({}, '', window.location.pathname);
 
             // Open add modal with URL
