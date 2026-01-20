@@ -834,6 +834,12 @@
         elements.btnInstall.addEventListener('click', handleInstall);
         elements.importFile.addEventListener('change', importRecipes);
 
+        // Prevent bookmarklet link from navigating when clicked (it's meant to be dragged)
+        elements.bookmarkletLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showToast('Drag this button to your bookmarks bar!');
+        });
+
         // Search
         elements.searchInput.addEventListener('input', handleSearch);
         elements.btnClearSearch.addEventListener('click', () => {
