@@ -840,6 +840,11 @@
             showToast('Drag this button to your bookmarks bar!');
         });
 
+        // Bookmarklet modal done button
+        document.getElementById('btn-bookmarklet-done').addEventListener('click', () => {
+            closeModal(elements.modalBookmarklet);
+        });
+
         // Search
         elements.searchInput.addEventListener('input', handleSearch);
         elements.btnClearSearch.addEventListener('click', () => {
