@@ -283,10 +283,10 @@
             recipe.tags.push(...keywords.filter(Boolean));
         }
 
-        // Deduplicate tags
-        recipe.tags = [...new Set(recipe.tags.map(t => t.toLowerCase()))].map(t =>
-            t.charAt(0).toUpperCase() + t.slice(1)
-        );
+        // Deduplicate and properly capitalize tags
+        recipe.tags = [...new Set(recipe.tags.map(t => t.toLowerCase().trim()))].map(t =>
+            capitalizeTag(t)
+        ).filter(Boolean);
     }
 
     function formatDuration(isoDuration) {
@@ -471,13 +471,15 @@
         const recipes = getRecipes();
         let filtered = recipes;
 
+        // Sort by recently added first (default behavior)
+        filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
         // Apply sidebar filter (all, recent, favorites, or tag)
         if (currentFilter === 'recent') {
-            // Show recipes from last 7 days, sorted by date
+            // Show recipes from last 7 days
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
             filtered = filtered.filter(r => new Date(r.createdAt) >= oneWeekAgo);
-            filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         } else if (currentFilter === 'favorites') {
             filtered = filtered.filter(r => r.favorite);
         } else if (currentFilter !== 'all') {
@@ -539,16 +541,54 @@
         card.className = 'recipe-card';
         card.dataset.id = recipe.id;
 
-        // Image or placeholder
+        // Get source name from URL
+        let sourceName = '';
+        if (recipe.source) {
+            sourceName = getSourceName(recipe.source);
+        }
+
+        // Image section with overlay buttons
         let imageHtml;
+        const isFavorite = recipe.favorite ? 'active' : '';
+        const overlayButtons = `
+            <div class="card-overlay-buttons">
+                <button class="card-btn card-btn-favorite ${isFavorite}" data-action="favorite" title="Favorite">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="${recipe.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
+                <button class="card-btn card-btn-edit" data-action="edit" title="Edit">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+
         if (recipe.image) {
-            imageHtml = `<img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" class="recipe-card-image" loading="lazy" onerror="this.outerHTML='<div class=\\'recipe-card-placeholder\\'><svg width=\\'48\\' height=\\'48\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1.5\\'><path d=\\'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\\'></path></svg></div>'">`;
+            imageHtml = `
+                <div class="recipe-card-image-container">
+                    <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" class="recipe-card-image" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                    <div class="recipe-card-placeholder" style="display:none">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                    </div>
+                    ${overlayButtons}
+                    ${sourceName ? `<div class="card-source">${escapeHtml(sourceName)}</div>` : ''}
+                </div>`;
         } else {
-            imageHtml = `<div class="recipe-card-placeholder">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                </svg>
-            </div>`;
+            imageHtml = `
+                <div class="recipe-card-image-container">
+                    <div class="recipe-card-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                    </div>
+                    ${overlayButtons}
+                    ${sourceName ? `<div class="card-source">${escapeHtml(sourceName)}</div>` : ''}
+                </div>`;
         }
 
         // Meta info
@@ -581,9 +621,68 @@
             </div>
         `;
 
-        card.addEventListener('click', () => openViewModal(recipe.id));
+        // Handle card clicks
+        card.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (btn) {
+                e.stopPropagation();
+                if (btn.dataset.action === 'favorite') {
+                    toggleFavorite(recipe.id);
+                } else if (btn.dataset.action === 'edit') {
+                    openEditModal(recipe.id);
+                }
+            } else {
+                openViewModal(recipe.id);
+            }
+        });
 
         return card;
+    }
+
+    function getSourceName(url) {
+        try {
+            const hostname = new URL(url).hostname.replace('www.', '');
+            // Map common domains to friendly names
+            const siteNames = {
+                'cooking.nytimes.com': 'NYT Cooking',
+                'nytimes.com': 'New York Times',
+                'seriouseats.com': 'Serious Eats',
+                'bonappetit.com': 'Bon Appetit',
+                'allrecipes.com': 'Allrecipes',
+                'epicurious.com': 'Epicurious',
+                'foodnetwork.com': 'Food Network',
+                'food52.com': 'Food52',
+                'tasteofsouthindia.com': 'Taste of South India',
+                'simplyrecipes.com': 'Simply Recipes',
+                'budgetbytes.com': 'Budget Bytes',
+                'minimalistbaker.com': 'Minimalist Baker',
+                'halfbakedharvest.com': 'Half Baked Harvest',
+                'smittenkitchen.com': 'Smitten Kitchen',
+                'thekitchn.com': 'The Kitchn',
+                'delish.com': 'Delish',
+                'tasty.co': 'Tasty',
+                'eatingwell.com': 'EatingWell',
+                'cookieandkate.com': 'Cookie and Kate',
+                'loveandlemons.com': 'Love and Lemons',
+                'indianhealthyrecipes.com': 'Indian Healthy Recipes',
+                'hebbarskitchen.com': 'Hebbars Kitchen'
+            };
+            return siteNames[hostname] || hostname.split('.')[0].charAt(0).toUpperCase() + hostname.split('.')[0].slice(1);
+        } catch {
+            return '';
+        }
+    }
+
+    function toggleFavorite(id) {
+        const recipes = getRecipes();
+        const recipe = recipes.find(r => r.id === id);
+        if (recipe) {
+            recipe.favorite = !recipe.favorite;
+            recipe.updatedAt = new Date().toISOString();
+            saveRecipes(recipes);
+            renderRecipes();
+            showToast(recipe.favorite ? 'Added to favorites!' : 'Removed from favorites');
+        }
     }
 
     function renderTagsFilter() {
@@ -928,11 +1027,14 @@
     }
 
     async function importPaprikaFile(file) {
-        // Paprika files are gzip archives containing JSON recipe files
-        const JSZip = window.JSZip;
-        if (!JSZip) {
+        // Paprika files are zip archives containing gzip-compressed JSON recipe files
+        if (!window.JSZip) {
             // Load JSZip dynamically if not available
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+        }
+        if (!window.pako) {
+            // Load pako for gzip decompression
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js');
         }
 
         const arrayBuffer = await file.arrayBuffer();
@@ -944,12 +1046,21 @@
         zip.forEach((relativePath, zipEntry) => {
             if (!zipEntry.dir) {
                 filePromises.push(
-                    zipEntry.async('string').then(content => {
+                    zipEntry.async('uint8array').then(data => {
                         try {
+                            // Try to decompress with gzip first (Paprika files are gzip-compressed inside)
+                            let content;
+                            try {
+                                const decompressed = window.pako.inflate(data);
+                                content = new TextDecoder().decode(decompressed);
+                            } catch {
+                                // If decompression fails, try as plain text
+                                content = new TextDecoder().decode(data);
+                            }
                             const paprikaRecipe = JSON.parse(content);
                             recipes.push(convertPaprikaRecipe(paprikaRecipe));
                         } catch (e) {
-                            console.warn('Failed to parse recipe:', relativePath);
+                            console.warn('Failed to parse recipe:', relativePath, e.message);
                         }
                     })
                 );
@@ -961,9 +1072,23 @@
     }
 
     function convertPaprikaRecipe(p) {
+        // Handle categories - could be string, array, or comma-separated
+        let tags = [];
+        if (p.categories) {
+            if (Array.isArray(p.categories)) {
+                tags = p.categories;
+            } else {
+                tags = String(p.categories).split(/[,;]/).map(t => t.trim());
+            }
+        }
+        // Properly capitalize tags
+        tags = tags.filter(Boolean).map(t =>
+            t.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+        );
+
         return {
             title: p.name || 'Untitled Recipe',
-            image: p.image_url || p.photo_url || '',
+            image: p.image_url || p.photo_url || p.photo || '',
             servings: p.servings || '',
             prepTime: p.prep_time || '',
             cookTime: p.cook_time || p.total_time || '',
@@ -971,7 +1096,7 @@
             instructions: p.directions || p.instructions || '',
             notes: p.notes || '',
             source: p.source_url || p.source || '',
-            tags: p.categories ? p.categories.split(',').map(t => t.trim()).filter(Boolean) : []
+            tags: tags
         };
     }
 
@@ -1189,6 +1314,14 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function capitalizeTag(tag) {
+        if (!tag) return '';
+        // Handle multi-word tags (e.g., "instant pot" -> "Instant Pot")
+        return tag.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
     }
 
     function showToast(message) {
