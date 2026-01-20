@@ -327,7 +327,6 @@
         dropdownMenu: document.getElementById('dropdown-menu'),
         modalRecipe: document.getElementById('modal-recipe'),
         modalView: document.getElementById('modal-view'),
-        modalBookmarklet: document.getElementById('modal-bookmarklet'),
         recipeForm: document.getElementById('recipe-form'),
         recipeUrl: document.getElementById('recipe-url'),
         btnFetchUrl: document.getElementById('btn-fetch-url'),
@@ -337,10 +336,9 @@
         toastMessage: document.getElementById('toast-message'),
         btnImport: document.getElementById('btn-import'),
         btnExport: document.getElementById('btn-export'),
-        btnBookmarklet: document.getElementById('btn-bookmarklet'),
         btnInstall: document.getElementById('btn-install'),
         importFile: document.getElementById('import-file'),
-        bookmarkletLink: document.getElementById('bookmarklet-link')
+        bookmarkletDrag: document.getElementById('bookmarklet-drag')
     };
 
     // Current state
@@ -552,12 +550,11 @@
         openModal(elements.modalView);
     }
 
-    function openBookmarkletModal() {
-        // Create the bookmarklet
+    function setupBookmarklet() {
+        // Create bookmarklet with embedded favicon for a nice icon in bookmark bar
         const appUrl = window.location.href.split('?')[0].split('#')[0];
         const bookmarkletCode = `javascript:(function(){window.open('${appUrl}?url='+encodeURIComponent(window.location.href),'_blank')})()`;
-        elements.bookmarkletLink.href = bookmarkletCode;
-        openModal(elements.modalBookmarklet);
+        elements.bookmarkletDrag.href = bookmarkletCode;
     }
 
     function openModal(modal) {
@@ -580,7 +577,6 @@
     function closeAllModals() {
         closeModal(elements.modalRecipe);
         closeModal(elements.modalView);
-        closeModal(elements.modalBookmarklet);
     }
 
     // ============================================
@@ -830,19 +826,13 @@
         // Dropdown actions
         elements.btnImport.addEventListener('click', () => elements.importFile.click());
         elements.btnExport.addEventListener('click', exportRecipes);
-        elements.btnBookmarklet.addEventListener('click', openBookmarkletModal);
         elements.btnInstall.addEventListener('click', handleInstall);
         elements.importFile.addEventListener('change', importRecipes);
 
-        // Prevent bookmarklet link from navigating when clicked (it's meant to be dragged)
-        elements.bookmarkletLink.addEventListener('click', (e) => {
+        // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
+        elements.bookmarkletDrag.addEventListener('click', (e) => {
             e.preventDefault();
             showToast('Drag this button to your bookmarks bar!');
-        });
-
-        // Bookmarklet modal done button
-        document.getElementById('btn-bookmarklet-done').addEventListener('click', () => {
-            closeModal(elements.modalBookmarklet);
         });
 
         // Search
@@ -952,6 +942,7 @@
         renderRecipes();
         renderTagsFilter();
         setupEventListeners();
+        setupBookmarklet();
         checkUrlParams();
         registerServiceWorker();
     }

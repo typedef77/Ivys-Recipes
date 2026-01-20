@@ -141,6 +141,57 @@ h1, h2, h3, h4 {
     gap: 0.5rem;
 }
 
+/* Inline Bookmarklet */
+.bookmarklet-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    margin-right: 1rem;
+}
+
+.bookmarklet-drag-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: linear-gradient(135deg, var(--color-warm) 0%, var(--color-warm-light) 100%);
+    color: var(--color-secondary);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-warm);
+    cursor: grab;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.bookmarklet-drag-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.bookmarklet-drag-btn:active {
+    cursor: grabbing;
+}
+
+.bookmarklet-drag-btn svg {
+    flex-shrink: 0;
+}
+
+.bookmarklet-hint {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .bookmarklet-inline {
+        display: none;
+    }
+}
+
 /* Search Bar */
 .search-bar {
     padding: 1rem 1.5rem;
@@ -691,49 +742,6 @@ h1, h2, h3, h4 {
 
 .view-source a:hover {
     text-decoration: underline;
-}
-
-/* Bookmarklet Modal */
-.bookmarklet-container {
-    display: flex;
-    justify-content: center;
-    margin: 1.5rem 0;
-}
-
-.bookmarklet-btn {
-    display: inline-block;
-    padding: 0.875rem 1.5rem;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: white;
-    text-decoration: none;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    box-shadow: var(--shadow-md);
-    cursor: move;
-}
-
-.bookmarklet-instructions {
-    background-color: var(--color-background);
-    padding: 1rem;
-    border-radius: var(--radius-md);
-    margin-top: 1rem;
-}
-
-.bookmarklet-instructions h4 {
-    font-family: 'Inter', sans-serif;
-    font-size: 0.875rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-}
-
-.bookmarklet-instructions ol {
-    margin-left: 1.25rem;
-    font-size: 0.875rem;
-    color: var(--color-text-light);
-}
-
-.bookmarklet-instructions li {
-    margin-bottom: 0.5rem;
 }
 
 /* Toast */
