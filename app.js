@@ -901,13 +901,40 @@
             return;
         }
 
-        showToast(`Fetching ${urls.length} recipe${urls.length > 1 ? 's' : ''}...`);
+        // Show loading state
+        const loadingEl = document.createElement('div');
+        loadingEl.id = 'bulk-import-loading';
+        loadingEl.innerHTML = `
+            <div class="loading-overlay">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p id="loading-status">Starting import...</p>
+                    <p id="loading-progress">0 / ${urls.length}</p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(loadingEl);
+
+        const statusEl = document.getElementById('loading-status');
+        const progressEl = document.getElementById('loading-progress');
 
         let successCount = 0;
+        let failedUrls = [];
         const existing = getRecipes();
         const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
 
-        for (const url of urls) {
+        for (let i = 0; i < urls.length; i++) {
+            const url = urls[i];
+            progressEl.textContent = `${i + 1} / ${urls.length}`;
+
+            // Show which site we're fetching
+            try {
+                const hostname = new URL(url).hostname.replace('www.', '');
+                statusEl.textContent = `Fetching from ${hostname}...`;
+            } catch {
+                statusEl.textContent = `Fetching recipe ${i + 1}...`;
+            }
+
             try {
                 const recipe = await fetchRecipeFromUrl(url);
                 if (recipe.title && !existingTitles.has(recipe.title.toLowerCase())) {
@@ -917,16 +944,42 @@
                     existing.unshift(recipe);
                     existingTitles.add(recipe.title.toLowerCase());
                     successCount++;
+                    statusEl.textContent = `Added: ${recipe.title.substring(0, 30)}...`;
+                } else if (recipe.title) {
+                    statusEl.textContent = `Skipped (duplicate): ${recipe.title.substring(0, 25)}...`;
+                } else {
+                    failedUrls.push(url);
+                    statusEl.textContent = `No recipe found at this URL`;
                 }
             } catch (e) {
                 console.warn('Failed to fetch:', url, e);
+                failedUrls.push(url);
+                statusEl.textContent = `Failed to fetch recipe`;
             }
+
+            // Small delay to let UI update and not overwhelm the proxy
+            await new Promise(r => setTimeout(r, 500));
         }
 
+        // Remove loading overlay
+        loadingEl.remove();
+
+        // Save and update UI
         saveRecipes(existing);
         renderRecipes();
         renderTagsFilter();
-        showToast(`Imported ${successCount} of ${urls.length} recipes`);
+
+        // Show result
+        if (successCount > 0) {
+            showToast(`Imported ${successCount} of ${urls.length} recipes`);
+        } else {
+            showToast(`Could not import any recipes. Try adding them manually.`);
+        }
+
+        // Log failed URLs for debugging
+        if (failedUrls.length > 0) {
+            console.log('Failed to import these URLs:', failedUrls);
+        }
     }
 
     // ============================================
