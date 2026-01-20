@@ -327,6 +327,10 @@
         dropdownMenu: document.getElementById('dropdown-menu'),
         modalRecipe: document.getElementById('modal-recipe'),
         modalView: document.getElementById('modal-view'),
+        modalBulkImport: document.getElementById('modal-bulk-import'),
+        bulkUrls: document.getElementById('bulk-urls'),
+        btnBulkImport: document.getElementById('btn-bulk-import'),
+        btnDoBulkImport: document.getElementById('btn-do-bulk-import'),
         recipeForm: document.getElementById('recipe-form'),
         recipeUrl: document.getElementById('recipe-url'),
         btnFetchUrl: document.getElementById('btn-fetch-url'),
@@ -577,6 +581,7 @@
     function closeAllModals() {
         closeModal(elements.modalRecipe);
         closeModal(elements.modalView);
+        closeModal(elements.modalBulkImport);
     }
 
     // ============================================
@@ -702,43 +707,226 @@
         showToast('Recipes exported!');
     }
 
-    function importRecipes(e) {
+    async function importRecipes(e) {
         const file = e.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const imported = JSON.parse(event.target.result);
-                if (!Array.isArray(imported)) {
-                    throw new Error('Invalid format');
-                }
+        const fileName = file.name.toLowerCase();
 
-                const existing = getRecipes();
-                const existingIds = new Set(existing.map(r => r.id));
+        try {
+            let recipes = [];
 
-                let added = 0;
-                imported.forEach(recipe => {
-                    if (!existingIds.has(recipe.id)) {
-                        recipe.id = generateId();
-                        existing.unshift(recipe);
-                        added++;
-                    }
-                });
-
-                saveRecipes(existing);
-                renderRecipes();
-                renderTagsFilter();
-                showToast(`Imported ${added} recipe${added !== 1 ? 's' : ''}`);
-            } catch (error) {
-                showToast('Error importing recipes');
-                console.error('Import error:', error);
+            if (fileName.endsWith('.paprikarecipes')) {
+                // Paprika format - gzip containing recipe JSON files
+                recipes = await importPaprikaFile(file);
+            } else if (fileName.endsWith('.html') || fileName.endsWith('.htm')) {
+                // Paprika HTML export or other HTML
+                recipes = await importHtmlFile(file);
+            } else {
+                // Assume JSON (Ivy's Recipes format)
+                recipes = await importJsonFile(file);
             }
-        };
-        reader.readAsText(file);
+
+            if (recipes.length === 0) {
+                showToast('No recipes found in file');
+                return;
+            }
+
+            const existing = getRecipes();
+            const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
+
+            let added = 0;
+            recipes.forEach(recipe => {
+                // Skip duplicates by title
+                if (!existingTitles.has(recipe.title.toLowerCase())) {
+                    recipe.id = generateId();
+                    recipe.createdAt = new Date().toISOString();
+                    recipe.updatedAt = recipe.createdAt;
+                    existing.unshift(recipe);
+                    existingTitles.add(recipe.title.toLowerCase());
+                    added++;
+                }
+            });
+
+            saveRecipes(existing);
+            renderRecipes();
+            renderTagsFilter();
+            showToast(`Imported ${added} recipe${added !== 1 ? 's' : ''}`);
+        } catch (error) {
+            showToast('Error importing: ' + error.message);
+            console.error('Import error:', error);
+        }
 
         // Reset input
         e.target.value = '';
+    }
+
+    function importJsonFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    resolve(Array.isArray(data) ? data : [data]);
+                } catch (e) {
+                    reject(new Error('Invalid JSON file'));
+                }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
+    }
+
+    async function importPaprikaFile(file) {
+        // Paprika files are gzip archives containing JSON recipe files
+        const JSZip = window.JSZip;
+        if (!JSZip) {
+            // Load JSZip dynamically if not available
+            await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await window.JSZip.loadAsync(arrayBuffer);
+
+        const recipes = [];
+        const filePromises = [];
+
+        zip.forEach((relativePath, zipEntry) => {
+            if (!zipEntry.dir) {
+                filePromises.push(
+                    zipEntry.async('string').then(content => {
+                        try {
+                            const paprikaRecipe = JSON.parse(content);
+                            recipes.push(convertPaprikaRecipe(paprikaRecipe));
+                        } catch (e) {
+                            console.warn('Failed to parse recipe:', relativePath);
+                        }
+                    })
+                );
+            }
+        });
+
+        await Promise.all(filePromises);
+        return recipes;
+    }
+
+    function convertPaprikaRecipe(p) {
+        return {
+            title: p.name || 'Untitled Recipe',
+            image: p.image_url || p.photo_url || '',
+            servings: p.servings || '',
+            prepTime: p.prep_time || '',
+            cookTime: p.cook_time || p.total_time || '',
+            ingredients: p.ingredients || '',
+            instructions: p.directions || p.instructions || '',
+            notes: p.notes || '',
+            source: p.source_url || p.source || '',
+            tags: p.categories ? p.categories.split(',').map(t => t.trim()).filter(Boolean) : []
+        };
+    }
+
+    function importHtmlFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(event.target.result, 'text/html');
+
+                    // Try to find Paprika-style recipe blocks
+                    const recipes = [];
+                    const recipeBlocks = doc.querySelectorAll('.recipe, [class*="recipe"]');
+
+                    if (recipeBlocks.length > 0) {
+                        recipeBlocks.forEach(block => {
+                            const recipe = extractRecipeFromHtml(block);
+                            if (recipe.title) recipes.push(recipe);
+                        });
+                    } else {
+                        // Try to extract single recipe from the whole document
+                        const recipe = extractRecipeFromHtml(doc.body);
+                        if (recipe.title) recipes.push(recipe);
+                    }
+
+                    resolve(recipes);
+                } catch (e) {
+                    reject(new Error('Failed to parse HTML'));
+                }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
+    }
+
+    function extractRecipeFromHtml(element) {
+        const getText = (selectors) => {
+            for (const sel of selectors) {
+                const el = element.querySelector(sel);
+                if (el) return el.textContent.trim();
+            }
+            return '';
+        };
+
+        return {
+            title: getText(['h1', 'h2', '.title', '.recipe-title', '[class*="title"]']),
+            ingredients: getText(['.ingredients', '[class*="ingredient"]']),
+            instructions: getText(['.directions', '.instructions', '[class*="direction"]', '[class*="instruction"]']),
+            notes: getText(['.notes', '[class*="note"]']),
+            prepTime: getText(['.prep-time', '[class*="prep"]']),
+            cookTime: getText(['.cook-time', '[class*="cook"]']),
+            servings: getText(['.servings', '.yield', '[class*="serving"]', '[class*="yield"]']),
+            source: '',
+            image: '',
+            tags: []
+        };
+    }
+
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    async function importBulkUrls(urlText) {
+        const urls = urlText.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.startsWith('http'));
+
+        if (urls.length === 0) {
+            showToast('No valid URLs found');
+            return;
+        }
+
+        showToast(`Fetching ${urls.length} recipe${urls.length > 1 ? 's' : ''}...`);
+
+        let successCount = 0;
+        const existing = getRecipes();
+        const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
+
+        for (const url of urls) {
+            try {
+                const recipe = await fetchRecipeFromUrl(url);
+                if (recipe.title && !existingTitles.has(recipe.title.toLowerCase())) {
+                    recipe.id = generateId();
+                    recipe.createdAt = new Date().toISOString();
+                    recipe.updatedAt = recipe.createdAt;
+                    existing.unshift(recipe);
+                    existingTitles.add(recipe.title.toLowerCase());
+                    successCount++;
+                }
+            } catch (e) {
+                console.warn('Failed to fetch:', url, e);
+            }
+        }
+
+        saveRecipes(existing);
+        renderRecipes();
+        renderTagsFilter();
+        showToast(`Imported ${successCount} of ${urls.length} recipes`);
     }
 
     // ============================================
@@ -825,6 +1013,15 @@
 
         // Dropdown actions
         elements.btnImport.addEventListener('click', () => elements.importFile.click());
+        elements.btnBulkImport.addEventListener('click', () => {
+            elements.bulkUrls.value = '';
+            openModal(elements.modalBulkImport);
+        });
+        elements.btnDoBulkImport.addEventListener('click', async () => {
+            const urls = elements.bulkUrls.value;
+            closeModal(elements.modalBulkImport);
+            await importBulkUrls(urls);
+        });
         elements.btnExport.addEventListener('click', exportRecipes);
         elements.btnInstall.addEventListener('click', handleInstall);
         elements.importFile.addEventListener('change', importRecipes);
