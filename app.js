@@ -1018,13 +1018,19 @@
         });
 
         // Close dropdown when clicking elsewhere
-        document.addEventListener('click', () => {
-            elements.dropdownMenu.hidden = true;
+        document.addEventListener('click', (e) => {
+            if (!elements.dropdownMenu.contains(e.target) && e.target !== elements.btnMenu) {
+                elements.dropdownMenu.hidden = true;
+            }
         });
 
         // Dropdown actions
-        elements.btnImport.addEventListener('click', () => elements.importFile.click());
+        elements.btnImport.addEventListener('click', () => {
+            elements.dropdownMenu.hidden = true;
+            elements.importFile.click();
+        });
         elements.btnBulkImport.addEventListener('click', () => {
+            elements.dropdownMenu.hidden = true;
             elements.bulkUrls.value = '';
             openModal(elements.modalBulkImport);
         });
@@ -1033,8 +1039,14 @@
             closeModal(elements.modalBulkImport);
             await importBulkUrls(urls);
         });
-        elements.btnExport.addEventListener('click', exportRecipes);
-        elements.btnInstall.addEventListener('click', handleInstall);
+        elements.btnExport.addEventListener('click', () => {
+            elements.dropdownMenu.hidden = true;
+            exportRecipes();
+        });
+        elements.btnInstall.addEventListener('click', () => {
+            elements.dropdownMenu.hidden = true;
+            handleInstall();
+        });
         elements.importFile.addEventListener('change', importRecipes);
 
         // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
