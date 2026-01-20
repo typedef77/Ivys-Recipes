@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate App Icons</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #e07a5f; }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .icon-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .icon-item canvas {
+            border-radius: 20%;
+        }
+        .icon-item p {
+            margin: 10px 0 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .icon-item a {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 12px;
+            background: #e07a5f;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        .icon-item a:hover {
+            background: #c96a52;
+        }
+        .instructions {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .instructions ol {
+            margin-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ivy's Recipes - Icon Generator</h1>
+
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Click "Download" on each icon size below</li>
+            <li>Save each file with the filename shown (e.g., icon-72.png)</li>
+            <li>Place all downloaded files in the <code>icons/</code> folder</li>
+        </ol>
+    </div>
+
+    <div id="icon-grid" class="icon-grid"></div>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        const grid = document.getElementById('icon-grid');
+
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 512;
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#e07a5f');
+            gradient.addColorStop(1, '#c96a52');
+
+            // Rounded rectangle background
+            const radius = 96 * scale;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Card background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            const cardX = 120 * scale;
+            const cardY = 100 * scale;
+            const cardW = 272 * scale;
+            const cardH = 312 * scale;
+            const cardR = 24 * scale;
+            ctx.beginPath();
+            ctx.roundRect(cardX, cardY, cardW, cardH, cardR);
+            ctx.fill();
+
+            // Card border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 24 * scale;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Text lines
+            const lines = [
+                [168, 176, 344, 176],
+                [168, 232, 296, 232],
+                [168, 288, 320, 288],
+                [168, 344, 264, 344]
+            ];
+
+            ctx.lineWidth = 24 * scale;
+            lines.forEach(([x1, y1, x2, y2]) => {
+                ctx.beginPath();
+                ctx.moveTo(x1 * scale, y1 * scale);
+                ctx.lineTo(x2 * scale, y2 * scale);
+                ctx.stroke();
+            });
+
+            // Bookmark
+            ctx.fillStyle = '#f2cc8f';
+            ctx.beginPath();
+            ctx.moveTo(360 * scale, 80 * scale);
+            ctx.lineTo(360 * scale, 160 * scale);
+            ctx.lineTo(392 * scale, 140 * scale);
+            ctx.lineTo(424 * scale, 160 * scale);
+            ctx.lineTo(424 * scale, 80 * scale);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        sizes.forEach(size => {
+            const item = document.createElement('div');
+            item.className = 'icon-item';
+
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            canvas.style.width = Math.min(size, 100) + 'px';
+            canvas.style.height = Math.min(size, 100) + 'px';
+
+            drawIcon(canvas, size);
+
+            const filename = `icon-${size}.png`;
+
+            const link = document.createElement('a');
+            link.textContent = 'Download';
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+
+            const label = document.createElement('p');
+            label.textContent = filename;
+
+            item.appendChild(canvas);
+            item.appendChild(label);
+            item.appendChild(link);
+            grid.appendChild(item);
+        });
+    </script>
+</body>
+</html>
