@@ -88,20 +88,51 @@
     // URL Recipe Extraction
     // ============================================
 
+    const CORS_PROXIES = [
+        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+    ];
+
     async function fetchRecipeFromUrl(url) {
-        // We'll use a CORS proxy or direct fetch with recipe schema extraction
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        let lastError = null;
 
-        try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Failed to fetch URL');
+        for (const makeProxyUrl of CORS_PROXIES) {
+            try {
+                const proxyUrl = makeProxyUrl(url);
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-            const html = await response.text();
-            return parseRecipeFromHtml(html, url);
-        } catch (error) {
-            console.error('Error fetching recipe:', error);
-            throw new Error('Could not fetch recipe from URL. You may need to enter it manually.');
+                const response = await fetch(proxyUrl, {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    }
+                });
+                clearTimeout(timeout);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const html = await response.text();
+                if (!html || html.length < 100) {
+                    throw new Error('Empty response');
+                }
+
+                const recipe = parseRecipeFromHtml(html, url);
+                if (recipe.title) {
+                    return recipe;
+                }
+                throw new Error('No recipe data found');
+            } catch (error) {
+                lastError = error;
+                console.warn(`Proxy failed for ${url}:`, error.message);
+                continue; // Try next proxy
+            }
         }
+
+        throw lastError || new Error('All proxies failed');
     }
 
     function parseRecipeFromHtml(html, sourceUrl) {
@@ -910,6 +941,7 @@
                     <div class="loading-spinner"></div>
                     <p id="loading-status">Starting import...</p>
                     <p id="loading-progress">0 / ${urls.length}</p>
+                    <p id="loading-success" style="color: #81b29a; font-size: 0.875rem;">0 added</p>
                 </div>
             </div>
         `;
@@ -917,8 +949,10 @@
 
         const statusEl = document.getElementById('loading-status');
         const progressEl = document.getElementById('loading-progress');
+        const successEl = document.getElementById('loading-success');
 
         let successCount = 0;
+        let skippedCount = 0;
         let failedUrls = [];
         const existing = getRecipes();
         const existingTitles = new Set(existing.map(r => r.title.toLowerCase()));
@@ -928,8 +962,9 @@
             progressEl.textContent = `${i + 1} / ${urls.length}`;
 
             // Show which site we're fetching
+            let hostname = 'unknown';
             try {
-                const hostname = new URL(url).hostname.replace('www.', '');
+                hostname = new URL(url).hostname.replace('www.', '');
                 statusEl.textContent = `Fetching from ${hostname}...`;
             } catch {
                 statusEl.textContent = `Fetching recipe ${i + 1}...`;
@@ -944,41 +979,63 @@
                     existing.unshift(recipe);
                     existingTitles.add(recipe.title.toLowerCase());
                     successCount++;
-                    statusEl.textContent = `Added: ${recipe.title.substring(0, 30)}...`;
+                    successEl.textContent = `${successCount} added`;
+                    statusEl.textContent = `Added: ${recipe.title.substring(0, 30)}${recipe.title.length > 30 ? '...' : ''}`;
+
+                    // Save after each successful add so we don't lose progress
+                    saveRecipes(existing);
                 } else if (recipe.title) {
-                    statusEl.textContent = `Skipped (duplicate): ${recipe.title.substring(0, 25)}...`;
+                    skippedCount++;
+                    statusEl.textContent = `Skipped duplicate: ${recipe.title.substring(0, 25)}...`;
                 } else {
-                    failedUrls.push(url);
-                    statusEl.textContent = `No recipe found at this URL`;
+                    failedUrls.push({ url, reason: 'No recipe data found' });
+                    statusEl.textContent = `No recipe found on ${hostname}`;
                 }
             } catch (e) {
-                console.warn('Failed to fetch:', url, e);
-                failedUrls.push(url);
-                statusEl.textContent = `Failed to fetch recipe`;
+                console.warn('Failed to fetch:', url, e.message);
+                failedUrls.push({ url, reason: e.message });
+                statusEl.textContent = `Failed: ${hostname} - ${e.message.substring(0, 20)}`;
             }
 
-            // Small delay to let UI update and not overwhelm the proxy
-            await new Promise(r => setTimeout(r, 500));
+            // Small delay between requests
+            await new Promise(r => setTimeout(r, 300));
         }
+
+        // Show completion status before removing overlay
+        statusEl.textContent = 'Import complete!';
+        progressEl.textContent = `Done`;
+        await new Promise(r => setTimeout(r, 1000));
 
         // Remove loading overlay
         loadingEl.remove();
 
-        // Save and update UI
-        saveRecipes(existing);
+        // Update UI
         renderRecipes();
         renderTagsFilter();
 
-        // Show result
+        // Show detailed result
+        let message = '';
         if (successCount > 0) {
-            showToast(`Imported ${successCount} of ${urls.length} recipes`);
-        } else {
-            showToast(`Could not import any recipes. Try adding them manually.`);
+            message = `Imported ${successCount} recipe${successCount !== 1 ? 's' : ''}`;
         }
+        if (skippedCount > 0) {
+            message += message ? `, ${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped` : `${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`;
+        }
+        if (failedUrls.length > 0) {
+            message += message ? `, ${failedUrls.length} failed` : `${failedUrls.length} failed`;
+        }
+        if (!message) {
+            message = 'No recipes could be imported';
+        }
+        showToast(message);
 
         // Log failed URLs for debugging
         if (failedUrls.length > 0) {
-            console.log('Failed to import these URLs:', failedUrls);
+            console.log('=== Failed to import these URLs ===');
+            failedUrls.forEach(({ url, reason }) => {
+                console.log(`${url}\n  Reason: ${reason}`);
+            });
+            console.log('===================================');
         }
     }
 
