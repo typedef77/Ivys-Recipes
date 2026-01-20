@@ -160,6 +160,10 @@
                 const recipeData = findRecipeInJsonLd(data);
                 if (recipeData) {
                     extractFromJsonLd(recipeData, recipe);
+                    // If no image from JSON-LD, try to find one in the page
+                    if (!recipe.image) {
+                        recipe.image = findBestImage(doc);
+                    }
                     if (recipe.title) return recipe;
                 }
             } catch (e) {
@@ -254,15 +258,35 @@
             const categories = Array.isArray(data.recipeCategory)
                 ? data.recipeCategory
                 : [data.recipeCategory];
-            recipe.tags = categories.map(c => c.trim()).filter(Boolean);
+            categories.forEach(cat => {
+                // Split by comma in case multiple tags are in one string
+                const splitTags = String(cat).split(/[,;]/).map(t => t.trim()).filter(Boolean);
+                recipe.tags.push(...splitTags);
+            });
         }
 
         if (data.recipeCuisine) {
             const cuisines = Array.isArray(data.recipeCuisine)
                 ? data.recipeCuisine
                 : [data.recipeCuisine];
-            recipe.tags = [...recipe.tags, ...cuisines.map(c => c.trim())];
+            cuisines.forEach(cuisine => {
+                const splitTags = String(cuisine).split(/[,;]/).map(t => t.trim()).filter(Boolean);
+                recipe.tags.push(...splitTags);
+            });
         }
+
+        // Also check keywords
+        if (data.keywords) {
+            const keywords = Array.isArray(data.keywords)
+                ? data.keywords
+                : String(data.keywords).split(/[,;]/).map(t => t.trim());
+            recipe.tags.push(...keywords.filter(Boolean));
+        }
+
+        // Deduplicate tags
+        recipe.tags = [...new Set(recipe.tags.map(t => t.toLowerCase()))].map(t =>
+            t.charAt(0).toUpperCase() + t.slice(1)
+        );
     }
 
     function formatDuration(isoDuration) {
@@ -311,12 +335,10 @@
                        doc.querySelector('[class*="title"]')?.textContent?.trim() ||
                        doc.title || '';
 
-        // Image
-        const img = doc.querySelector('.recipe-image img') ||
-                    doc.querySelector('[class*="recipe"] img') ||
-                    doc.querySelector('article img') ||
-                    doc.querySelector('main img');
-        recipe.image = img?.src || '';
+        // Image - try many sources
+        if (!recipe.image) {
+            recipe.image = findBestImage(doc);
+        }
 
         // Try to find ingredients list
         const ingredientsList = doc.querySelector('.ingredients') ||
@@ -340,6 +362,56 @@
         }
     }
 
+    function findBestImage(doc) {
+        // Try Open Graph image first (usually the best)
+        const ogImage = doc.querySelector('meta[property="og:image"]')?.content;
+        if (ogImage) return ogImage;
+
+        // Try Twitter card image
+        const twitterImage = doc.querySelector('meta[name="twitter:image"]')?.content;
+        if (twitterImage) return twitterImage;
+
+        // Try recipe-specific selectors
+        const recipeSelectors = [
+            '.recipe-image img',
+            '.recipe-photo img',
+            '[class*="recipe-image"] img',
+            '[class*="recipe-photo"] img',
+            '[class*="hero"] img',
+            '.hero-image img',
+            'article img',
+            '.post-content img',
+            'main img',
+            '.entry-content img'
+        ];
+
+        for (const selector of recipeSelectors) {
+            const img = doc.querySelector(selector);
+            const src = img?.src || img?.getAttribute('data-src') || img?.getAttribute('data-lazy-src');
+            if (src && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar')) {
+                return src;
+            }
+        }
+
+        // Last resort: find the largest image
+        const allImages = doc.querySelectorAll('img');
+        let bestImg = null;
+        let bestSize = 0;
+        allImages.forEach(img => {
+            const src = img.src || img.getAttribute('data-src');
+            if (!src || src.includes('icon') || src.includes('logo') || src.includes('avatar')) return;
+            const width = parseInt(img.getAttribute('width')) || img.naturalWidth || 0;
+            const height = parseInt(img.getAttribute('height')) || img.naturalHeight || 0;
+            const size = width * height;
+            if (size > bestSize || (!bestImg && src)) {
+                bestSize = size;
+                bestImg = src;
+            }
+        });
+
+        return bestImg || '';
+    }
+
     // ============================================
     // UI Components
     // ============================================
@@ -349,24 +421,33 @@
         recipeGrid: document.getElementById('recipe-grid'),
         emptyState: document.getElementById('empty-state'),
         noResults: document.getElementById('no-results'),
-        searchInput: document.getElementById('search-input'),
-        btnClearSearch: document.getElementById('btn-clear-search'),
-        tagsFilter: document.getElementById('tags-filter'),
+        // Sidebar elements
+        sidebarSearch: document.getElementById('sidebar-search'),
+        sidebarTags: document.getElementById('sidebar-tags'),
+        countAll: document.getElementById('count-all'),
+        contentTitle: document.getElementById('content-title'),
+        recipeCount: document.getElementById('recipe-count'),
+        // Header elements
         btnAddRecipe: document.getElementById('btn-add-recipe'),
         btnAddFirst: document.getElementById('btn-add-first'),
         btnMenu: document.getElementById('btn-menu'),
         dropdownMenu: document.getElementById('dropdown-menu'),
+        // Modals
         modalRecipe: document.getElementById('modal-recipe'),
         modalView: document.getElementById('modal-view'),
         modalBulkImport: document.getElementById('modal-bulk-import'),
+        modalFailedUrls: document.getElementById('modal-failed-urls'),
+        failedUrlsList: document.getElementById('failed-urls-list'),
         bulkUrls: document.getElementById('bulk-urls'),
         btnBulkImport: document.getElementById('btn-bulk-import'),
         btnDoBulkImport: document.getElementById('btn-do-bulk-import'),
+        // Form elements
         recipeForm: document.getElementById('recipe-form'),
         recipeUrl: document.getElementById('recipe-url'),
         btnFetchUrl: document.getElementById('btn-fetch-url'),
         modalTitle: document.getElementById('modal-title'),
         imagePreview: document.getElementById('image-preview'),
+        // Other
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toast-message'),
         btnImport: document.getElementById('btn-import'),
@@ -390,8 +471,17 @@
         const recipes = getRecipes();
         let filtered = recipes;
 
-        // Apply tag filter
-        if (currentFilter !== 'all') {
+        // Apply sidebar filter (all, recent, favorites, or tag)
+        if (currentFilter === 'recent') {
+            // Show recipes from last 7 days, sorted by date
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            filtered = filtered.filter(r => new Date(r.createdAt) >= oneWeekAgo);
+            filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } else if (currentFilter === 'favorites') {
+            filtered = filtered.filter(r => r.favorite);
+        } else if (currentFilter !== 'all') {
+            // Tag filter
             filtered = filtered.filter(r =>
                 r.tags && r.tags.some(t =>
                     t.toLowerCase() === currentFilter.toLowerCase()
@@ -408,6 +498,21 @@
                 r.tags?.some(t => t.toLowerCase().includes(search))
             );
         }
+
+        // Update recipe count in sidebar
+        elements.countAll.textContent = recipes.length;
+
+        // Update content title and count
+        let titleText = 'All Recipes';
+        if (currentFilter === 'recent') {
+            titleText = 'Recently Added';
+        } else if (currentFilter === 'favorites') {
+            titleText = 'Favorites';
+        } else if (currentFilter !== 'all') {
+            titleText = currentFilter;
+        }
+        elements.contentTitle.textContent = titleText;
+        elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
         // Update UI
         elements.recipeGrid.innerHTML = '';
@@ -456,10 +561,16 @@
             metaParts.push(`<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>${escapeHtml(recipe.servings)}</span>`);
         }
 
-        // Tags
-        const tagsHtml = (recipe.tags || []).slice(0, 3).map(tag =>
+        // Tags - show first 2, then "more" button if there are additional tags
+        const allTags = recipe.tags || [];
+        const visibleTags = allTags.slice(0, 2);
+        const hiddenCount = allTags.length - 2;
+        let tagsHtml = visibleTags.map(tag =>
             `<span class="recipe-card-tag">${escapeHtml(tag)}</span>`
         ).join('');
+        if (hiddenCount > 0) {
+            tagsHtml += `<span class="recipe-card-tag more-tags">+${hiddenCount} more</span>`;
+        }
 
         card.innerHTML = `
             ${imageHtml}
@@ -477,12 +588,27 @@
 
     function renderTagsFilter() {
         const tags = getAllTags();
-        elements.tagsFilter.innerHTML = `
-            <button class="tag-chip ${currentFilter === 'all' ? 'active' : ''}" data-tag="all">All Recipes</button>
-            ${tags.map(tag => `
-                <button class="tag-chip ${currentFilter === tag ? 'active' : ''}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>
-            `).join('')}
-        `;
+        // Render tags as sidebar items
+        elements.sidebarTags.innerHTML = tags.map(tag => `
+            <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                </svg>
+                ${escapeHtml(tag)}
+            </button>
+        `).join('');
+
+        // Update active state on all sidebar items
+        updateSidebarActiveState();
+    }
+
+    function updateSidebarActiveState() {
+        // Update Library section items
+        document.querySelectorAll('.sidebar-item[data-filter]').forEach(item => {
+            const filter = item.dataset.filter;
+            item.classList.toggle('active', filter === currentFilter);
+        });
     }
 
     // ============================================
@@ -613,6 +739,7 @@
         closeModal(elements.modalRecipe);
         closeModal(elements.modalView);
         closeModal(elements.modalBulkImport);
+        closeModal(elements.modalFailedUrls);
     }
 
     // ============================================
@@ -697,20 +824,12 @@
 
     function handleSearch(e) {
         currentSearch = e.target.value;
-        elements.btnClearSearch.hidden = !currentSearch;
         renderRecipes();
     }
 
-    function handleTagFilter(e) {
-        if (!e.target.classList.contains('tag-chip')) return;
-
-        currentFilter = e.target.dataset.tag;
-
-        // Update active state
-        elements.tagsFilter.querySelectorAll('.tag-chip').forEach(chip => {
-            chip.classList.toggle('active', chip.dataset.tag === currentFilter);
-        });
-
+    function handleSidebarFilter(filter) {
+        currentFilter = filter;
+        updateSidebarActiveState();
         renderRecipes();
     }
 
@@ -1029,15 +1148,37 @@
         }
         showToast(message);
 
-        // Log failed URLs for debugging
+        // Show failed URLs in modal
         if (failedUrls.length > 0) {
-            console.log('=== Failed to import these URLs ===');
-            failedUrls.forEach(({ url, reason }) => {
-                console.log(`${url}\n  Reason: ${reason}`);
-            });
-            console.log('===================================');
+            showFailedUrlsModal(failedUrls);
         }
     }
+
+    function showFailedUrlsModal(failedUrls) {
+        elements.failedUrlsList.innerHTML = failedUrls.map(({ url }) => {
+            let hostname = 'unknown';
+            try {
+                hostname = new URL(url).hostname.replace('www.', '');
+            } catch {}
+            return `
+                <div class="failed-url-item">
+                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(url)}">${hostname}</a>
+                    <div class="failed-url-actions">
+                        <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${escapeHtml(url)}');this.textContent='Copied!'">Copy</button>
+                        <button class="btn btn-primary" data-url="${escapeHtml(url)}" onclick="window.addManualRecipeFromUrl(this.dataset.url)">Add Manually</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        openModal(elements.modalFailedUrls);
+    }
+
+    // Global function to add recipe manually from failed URL
+    window.addManualRecipeFromUrl = function(url) {
+        closeModal(elements.modalFailedUrls);
+        openAddModal();
+        elements.recipeUrl.value = url;
+    };
 
     // ============================================
     // Utility Functions
@@ -1165,17 +1306,23 @@
             showToast('Drag this button to your bookmarks bar!');
         });
 
-        // Search
-        elements.searchInput.addEventListener('input', handleSearch);
-        elements.btnClearSearch.addEventListener('click', () => {
-            elements.searchInput.value = '';
-            currentSearch = '';
-            elements.btnClearSearch.hidden = true;
-            renderRecipes();
+        // Sidebar search
+        elements.sidebarSearch.addEventListener('input', handleSearch);
+
+        // Sidebar navigation - Library section
+        document.querySelectorAll('.sidebar-item[data-filter]').forEach(item => {
+            item.addEventListener('click', () => {
+                handleSidebarFilter(item.dataset.filter);
+            });
         });
 
-        // Tags filter
-        elements.tagsFilter.addEventListener('click', handleTagFilter);
+        // Sidebar tags - use event delegation since tags are rendered dynamically
+        elements.sidebarTags.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (item && item.dataset.filter) {
+                handleSidebarFilter(item.dataset.filter);
+            }
+        });
 
         // Form
         elements.recipeForm.addEventListener('submit', handleFormSubmit);
@@ -1241,7 +1388,7 @@
             // Ctrl/Cmd + K for search
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                elements.searchInput.focus();
+                elements.sidebarSearch.focus();
             }
         });
     }
