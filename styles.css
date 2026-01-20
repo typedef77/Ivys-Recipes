@@ -460,6 +460,10 @@ h1, h2, h3, h4 {
     padding: 1rem;
 }
 
+.modal[hidden] {
+    display: none !important;
+}
+
 .modal-backdrop {
     position: absolute;
     inset: 0;
