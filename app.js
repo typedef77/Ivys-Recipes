@@ -585,6 +585,8 @@
         btnFetchUrl: document.getElementById('btn-fetch-url'),
         modalTitle: document.getElementById('modal-title'),
         imagePreview: document.getElementById('image-preview'),
+        btnUploadImage: document.getElementById('btn-upload-image'),
+        recipeImageFile: document.getElementById('recipe-image-file'),
         // View folder menu
         btnAddToFolder: document.getElementById('btn-add-to-folder'),
         viewFolderDropdown: document.getElementById('view-folder-dropdown'),
@@ -647,7 +649,8 @@
             filtered = filtered.filter(r =>
                 r.title.toLowerCase().includes(search) ||
                 r.ingredients?.toLowerCase().includes(search) ||
-                r.tags?.some(t => t.toLowerCase().includes(search))
+                r.tags?.some(t => t.toLowerCase().includes(search)) ||
+                r.source?.toLowerCase().includes(search)
             );
         }
 
@@ -703,14 +706,18 @@
 
         // Build folder options for dropdown
         const folders = getFolders();
-        const folderOptions = folders.map(f => `
-            <button class="card-dropdown-item" data-action="add-to-folder" data-folder-id="${f.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        const recipeFolders = recipe.folders || [];
+        const folderOptions = folders.map(f => {
+            const isInFolder = recipeFolders.includes(f.id);
+            return `
+            <button class="card-dropdown-item ${isInFolder ? 'in-folder' : ''}" data-action="toggle-folder" data-folder-id="${f.id}">
+                <svg viewBox="0 0 24 24" fill="${isInFolder ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                 </svg>
                 ${escapeHtml(f.name)}
+                ${isInFolder ? '<svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
             </button>
-        `).join('');
+        `}).join('');
 
         // Image section with overlay buttons
         const isFavorite = recipe.favorite ? 'active' : '';
@@ -823,11 +830,20 @@
                     if (confirm('Are you sure you want to delete this recipe?')) {
                         deleteRecipe(recipe.id);
                     }
-                } else if (action === 'add-to-folder') {
+                } else if (action === 'toggle-folder') {
                     closeAllCardMenus();
                     const folderId = btn.dataset.folderId;
-                    addRecipeToFolder(recipe.id, folderId);
-                    showToast('Added to folder');
+                    const updatedRecipe = getRecipeById(recipe.id);
+                    const isInFolder = updatedRecipe.folders && updatedRecipe.folders.includes(folderId);
+                    if (isInFolder) {
+                        removeRecipeFromFolder(recipe.id, folderId);
+                        showToast('Removed from folder');
+                    } else {
+                        addRecipeToFolder(recipe.id, folderId);
+                        showToast('Added to folder');
+                    }
+                    renderRecipes();
+                    renderFolders();
                 } else if (action === 'new-folder') {
                     closeAllCardMenus();
                     const folderName = prompt('Enter folder name:');
@@ -954,15 +970,45 @@
             const count = recipes.filter(r => r.folders && r.folders.includes(folder.id)).length;
             const isActive = currentFilter === `folder:${folder.id}`;
             return `
-                <button class="sidebar-item ${isActive ? 'active' : ''}" data-filter="folder:${folder.id}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    ${escapeHtml(folder.name)}
-                    <span class="sidebar-item-count">${count}</span>
-                </button>
+                <div class="sidebar-folder-item ${isActive ? 'active' : ''}">
+                    <button class="sidebar-item" data-filter="folder:${folder.id}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        ${escapeHtml(folder.name)}
+                        <span class="sidebar-item-count">${count}</span>
+                    </button>
+                    <button class="sidebar-folder-delete" data-folder-id="${folder.id}" title="Delete folder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6 6 18M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             `;
         }).join('');
+    }
+
+    function deleteFolder(folderId) {
+        // Remove folder from all recipes first
+        const recipes = getRecipes();
+        recipes.forEach(recipe => {
+            if (recipe.folders && recipe.folders.includes(folderId)) {
+                recipe.folders = recipe.folders.filter(f => f !== folderId);
+            }
+        });
+        saveRecipes(recipes);
+
+        // Delete the folder
+        const folders = getFolders().filter(f => f.id !== folderId);
+        saveFolders(folders);
+
+        // If we're viewing this folder, switch to all
+        if (currentFilter === `folder:${folderId}`) {
+            handleSidebarFilter('all');
+        }
+
+        renderFolders();
+        renderRecipes();
     }
 
     function populateViewFolderList() {
@@ -1717,10 +1763,11 @@
     }
 
     // ============================================
-    // Photo Import / OCR
+    // Cookbook Photo Import
     // ============================================
 
     let selectedPhotoFile = null;
+    let selectedPhotoDataUrl = null;
 
     function openPhotoImportModal() {
         resetPhotoImport();
@@ -1729,11 +1776,10 @@
 
     function resetPhotoImport() {
         selectedPhotoFile = null;
+        selectedPhotoDataUrl = null;
         if (elements.photoImportArea) elements.photoImportArea.hidden = false;
         if (elements.photoPreviewContainer) elements.photoPreviewContainer.hidden = true;
         if (elements.photoPreview) elements.photoPreview.src = '';
-        if (elements.ocrProgress) elements.ocrProgress.hidden = true;
-        if (elements.ocrProgressFill) elements.ocrProgressFill.style.width = '0%';
         if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = true;
         if (elements.photoFile) elements.photoFile.value = '';
     }
@@ -1747,7 +1793,8 @@
         selectedPhotoFile = file;
         const reader = new FileReader();
         reader.onload = (e) => {
-            elements.photoPreview.src = e.target.result;
+            selectedPhotoDataUrl = e.target.result;
+            elements.photoPreview.src = selectedPhotoDataUrl;
             elements.photoImportArea.hidden = true;
             elements.photoPreviewContainer.hidden = false;
             elements.btnProcessPhoto.disabled = false;
@@ -1755,142 +1802,24 @@
         reader.readAsDataURL(file);
     }
 
-    async function processPhotoOCR() {
-        if (!selectedPhotoFile) return;
+    function processCookbookPhoto() {
+        if (!selectedPhotoDataUrl) return;
 
-        elements.btnProcessPhoto.disabled = true;
-        elements.ocrProgress.hidden = false;
-        elements.ocrStatus.textContent = 'Loading OCR engine...';
-        elements.ocrProgressFill.style.width = '10%';
+        // Close photo modal and open recipe form
+        closeModal(elements.modalPhotoImport);
+        openAddModal();
 
-        try {
-            // Check if Tesseract is available
-            if (typeof Tesseract === 'undefined') {
-                throw new Error('OCR library not loaded. Please check your internet connection.');
-            }
+        // Set the image in the form
+        document.getElementById('recipe-image').value = selectedPhotoDataUrl;
+        elements.imagePreview.style.backgroundImage = `url(${selectedPhotoDataUrl})`;
+        elements.imagePreview.hidden = false;
 
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: (m) => {
-                    if (m.status === 'recognizing text') {
-                        const progress = 20 + (m.progress * 70);
-                        elements.ocrProgressFill.style.width = `${progress}%`;
-                        elements.ocrStatus.textContent = `Recognizing text... ${Math.round(m.progress * 100)}%`;
-                    }
-                }
-            });
+        // Add "Cookbook" as a default tag
+        document.getElementById('recipe-tags').value = 'Cookbook';
 
-            elements.ocrStatus.textContent = 'Processing image...';
-            elements.ocrProgressFill.style.width = '20%';
-
-            const result = await worker.recognize(selectedPhotoFile);
-            const extractedText = result.data.text;
-
-            await worker.terminate();
-
-            elements.ocrProgressFill.style.width = '100%';
-            elements.ocrStatus.textContent = 'Complete!';
-
-            // Parse the extracted text
-            const parsedRecipe = parseRecipeText(extractedText);
-
-            // Close photo modal and open recipe form
-            closeModal(elements.modalPhotoImport);
-            openAddModal();
-
-            // Pre-fill the form with extracted data
-            if (parsedRecipe.title) {
-                document.getElementById('recipe-title').value = normalizeTitle(parsedRecipe.title);
-            }
-            if (parsedRecipe.ingredients) {
-                document.getElementById('recipe-ingredients').value = parsedRecipe.ingredients;
-            }
-            if (parsedRecipe.instructions) {
-                document.getElementById('recipe-instructions').value = parsedRecipe.instructions;
-            }
-            if (parsedRecipe.servings) {
-                document.getElementById('recipe-servings').value = parsedRecipe.servings;
-            }
-            if (parsedRecipe.prepTime) {
-                document.getElementById('recipe-prep-time').value = parsedRecipe.prepTime;
-            }
-            if (parsedRecipe.cookTime) {
-                document.getElementById('recipe-cook-time').value = parsedRecipe.cookTime;
-            }
-
-            showToast('Text extracted! Review and edit as needed.');
-
-        } catch (error) {
-            console.error('OCR Error:', error);
-            showToast(error.message || 'Failed to process image');
-            elements.btnProcessPhoto.disabled = false;
-        }
+        showToast('Photo added! Fill in the recipe details.');
     }
 
-    function parseRecipeText(text) {
-        // Basic recipe parsing from OCR text
-        const result = {
-            title: '',
-            ingredients: '',
-            instructions: '',
-            servings: '',
-            prepTime: '',
-            cookTime: ''
-        };
-
-        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.length === 0) return result;
-
-        // Try to identify title (usually first significant line)
-        const titleLine = lines.find(l => l.length > 3 && l.length < 100 && !/^(ingredients|instructions|directions|method|serves|prep|cook)/i.test(l));
-        if (titleLine) {
-            result.title = titleLine;
-        }
-
-        // Look for serving/time info
-        const servingsMatch = text.match(/serves?\s*:?\s*(\d+[-–]?\d*)/i);
-        if (servingsMatch) {
-            result.servings = servingsMatch[1];
-        }
-
-        const prepMatch = text.match(/prep(?:\s*time)?\s*:?\s*(\d+\s*(?:min|hour|hr|m|h)[\w\s]*)/i);
-        if (prepMatch) {
-            result.prepTime = prepMatch[1].trim();
-        }
-
-        const cookMatch = text.match(/cook(?:ing)?\s*(?:time)?\s*:?\s*(\d+\s*(?:min|hour|hr|m|h)[\w\s]*)/i);
-        if (cookMatch) {
-            result.cookTime = cookMatch[1].trim();
-        }
-
-        // Try to find ingredients section
-        const ingredientsStart = lines.findIndex(l => /^ingredients?\s*:?$/i.test(l));
-        const instructionsStart = lines.findIndex(l => /^(instructions?|directions?|method|steps?)\s*:?$/i.test(l));
-
-        if (ingredientsStart !== -1) {
-            const endIndex = instructionsStart !== -1 && instructionsStart > ingredientsStart
-                ? instructionsStart
-                : lines.length;
-            const ingredientLines = lines.slice(ingredientsStart + 1, endIndex)
-                .filter(l => !(/^(instructions?|directions?|method|steps?)\s*:?$/i.test(l)));
-            result.ingredients = ingredientLines.join('\n');
-        }
-
-        if (instructionsStart !== -1) {
-            const instructionLines = lines.slice(instructionsStart + 1)
-                .filter(l => l.length > 0);
-            result.instructions = instructionLines.join('\n');
-        }
-
-        // If no clear sections found, make a best guess
-        if (!result.ingredients && !result.instructions) {
-            // Assume first half might be ingredients, second half instructions
-            const midpoint = Math.floor(lines.length / 2);
-            result.ingredients = lines.slice(1, midpoint).join('\n');
-            result.instructions = lines.slice(midpoint).join('\n');
-        }
-
-        return result;
-    }
 
     // ============================================
     // Event Listeners
@@ -1917,14 +1846,16 @@
         // Sidebar toggle (mobile)
         if (elements.btnSidebarToggle) {
             elements.btnSidebarToggle.addEventListener('click', () => {
-                elements.sidebar.classList.toggle('open');
-                elements.sidebarOverlay.classList.toggle('visible');
+                const isOpen = elements.sidebar.classList.toggle('open');
+                elements.sidebarOverlay.classList.toggle('visible', isOpen);
+                elements.btnSidebarToggle.classList.toggle('sidebar-open', isOpen);
             });
         }
         if (elements.sidebarOverlay) {
             elements.sidebarOverlay.addEventListener('click', () => {
                 elements.sidebar.classList.remove('open');
                 elements.sidebarOverlay.classList.remove('visible');
+                elements.btnSidebarToggle.classList.remove('sidebar-open');
             });
         }
 
@@ -1988,7 +1919,7 @@
             elements.btnRemovePhoto.addEventListener('click', resetPhotoImport);
         }
         if (elements.btnProcessPhoto) {
-            elements.btnProcessPhoto.addEventListener('click', processPhotoOCR);
+            elements.btnProcessPhoto.addEventListener('click', processCookbookPhoto);
         }
 
         // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
@@ -2025,6 +1956,21 @@
 
         // Sidebar folders - use event delegation
         elements.sidebarFolders.addEventListener('click', (e) => {
+            // Check if delete button was clicked
+            const deleteBtn = e.target.closest('.sidebar-folder-delete');
+            if (deleteBtn) {
+                e.stopPropagation();
+                const folderId = deleteBtn.dataset.folderId;
+                const folders = getFolders();
+                const folder = folders.find(f => f.id === folderId);
+                if (folder && confirm(`Delete folder "${folder.name}"? Recipes will not be deleted.`)) {
+                    deleteFolder(folderId);
+                    showToast('Folder deleted');
+                }
+                return;
+            }
+
+            // Otherwise handle filter
             const item = e.target.closest('.sidebar-item');
             if (item && item.dataset.filter) {
                 handleSidebarFilter(item.dataset.filter);
@@ -2082,6 +2028,28 @@
                 elements.imagePreview.hidden = true;
             }
         });
+
+        // Image upload
+        if (elements.btnUploadImage) {
+            elements.btnUploadImage.addEventListener('click', () => {
+                elements.recipeImageFile.click();
+            });
+        }
+        if (elements.recipeImageFile) {
+            elements.recipeImageFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const dataUrl = event.target.result;
+                        document.getElementById('recipe-image').value = dataUrl;
+                        elements.imagePreview.style.backgroundImage = `url(${dataUrl})`;
+                        elements.imagePreview.hidden = false;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
 
         // Tag suggestions
         document.querySelectorAll('.tag-suggestion').forEach(btn => {
