@@ -43,51 +43,57 @@
                 </div>
             </div>
             <div class="header-content">
-                <nav class="nav-actions">
-                    <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
-                    <div class="menu-container">
-                        <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="1"></circle>
-                                <circle cx="19" cy="12" r="1"></circle>
-                                <circle cx="5" cy="12" r="1"></circle>
+                <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
+                <div class="menu-container">
+                    <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="12" cy="5" r="1"></circle>
+                            <circle cx="12" cy="19" r="1"></circle>
+                        </svg>
+                    </button>
+                    <!-- Dropdown Menu -->
+                    <div id="dropdown-menu" class="dropdown-menu" hidden>
+                        <button id="btn-import" class="dropdown-item">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
+                            Import File
                         </button>
-                        <!-- Dropdown Menu -->
-                        <div id="dropdown-menu" class="dropdown-menu" hidden>
-                            <button id="btn-import" class="dropdown-item">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="7 10 12 15 17 10"></polyline>
-                                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                                </svg>
-                                Import File
-                            </button>
-                            <button id="btn-bulk-import" class="dropdown-item">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                                </svg>
-                                Import URLs
-                            </button>
-                            <button id="btn-export" class="dropdown-item">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                    <polyline points="17 8 12 3 7 8"></polyline>
-                                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                                </svg>
-                                Export Recipes
-                            </button>
-                            <button id="btn-install" class="dropdown-item" hidden>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                                    <line x1="12" y1="18" x2="12" y2="18"></line>
-                                </svg>
-                                Install App
-                            </button>
-                        </div>
+                        <button id="btn-bulk-import" class="dropdown-item">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            Import URLs
+                        </button>
+                        <button id="btn-photo-import" class="dropdown-item">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
+                            Import from Photo
+                        </button>
+                        <button id="btn-export" class="dropdown-item">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Export Recipes
+                        </button>
+                        <button id="btn-install" class="dropdown-item" hidden>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                                <line x1="12" y1="18" x2="12" y2="18"></line>
+                            </svg>
+                            Install App
+                        </button>
                     </div>
-                </nav>
+                </div>
             </div>
         </header>
 
@@ -100,34 +106,68 @@
                 </div>
 
                 <div class="sidebar-section">
-                    <div class="sidebar-section-title">Library</div>
-                    <button class="sidebar-item active" data-filter="all">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                        </svg>
-                        All Recipes
-                        <span class="sidebar-item-count" id="count-all">0</span>
-                    </button>
-                    <button class="sidebar-item" data-filter="recent">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12 6 12 12 16 14"></polyline>
-                        </svg>
-                        Recently Added
-                    </button>
-                    <button class="sidebar-item" data-filter="favorites">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        Favorites
-                    </button>
+                    <div class="sidebar-section-content">
+                        <button class="sidebar-item active" data-filter="all">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            All Recipes
+                            <span class="sidebar-item-count" id="count-all">0</span>
+                        </button>
+                        <button class="sidebar-item" data-filter="recent">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            Recently Added
+                        </button>
+                        <button class="sidebar-item" data-filter="favorites">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            Favorites
+                        </button>
+                    </div>
                 </div>
 
-                <div class="sidebar-section">
-                    <div class="sidebar-section-title">Categories</div>
-                    <div class="sidebar-tags" id="sidebar-tags">
-                        <!-- Tags will be populated by JS -->
+                <div class="sidebar-section" id="folders-section">
+                    <div class="sidebar-section-header" data-toggle="folders">
+                        <span class="sidebar-section-title">Folders</span>
+                        <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="sidebar-section-content">
+                        <div id="sidebar-folders">
+                            <!-- Folders will be populated by JS -->
+                        </div>
+                        <div class="sidebar-section-footer">
+                            <button class="sidebar-add-btn" id="btn-add-folder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                New Folder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section collapsed" id="categories-section">
+                    <div class="sidebar-section-header" data-toggle="categories">
+                        <span class="sidebar-section-title">Categories</span>
+                        <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="sidebar-section-content">
+                        <div class="sidebar-tags" id="sidebar-tags">
+                            <!-- Tags will be populated by JS -->
+                        </div>
+                        <div class="sidebar-section-footer">
+                            <button class="sidebar-see-all" id="btn-see-all-categories">See all categories</button>
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -374,6 +414,47 @@ https://cooking.nytimes.com/..."></textarea>
             </div>
         </div>
 
+        <!-- Photo Import Modal -->
+        <div id="modal-photo-import" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-medium">
+                <div class="modal-header">
+                    <h2>Import from Photo</h2>
+                    <button class="btn btn-icon modal-close" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6 6 18M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="help-text">Take a photo of a recipe or upload an image to extract the recipe text.</p>
+                    <div class="photo-import-area" id="photo-import-area">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                        <p>Click to select or drop an image here</p>
+                        <p class="help-text">Supports JPG, PNG, WebP</p>
+                    </div>
+                    <div id="photo-preview-container" hidden>
+                        <img id="photo-preview" alt="Recipe photo preview">
+                        <button type="button" id="btn-remove-photo" class="btn btn-secondary btn-sm">Remove</button>
+                    </div>
+                    <div id="ocr-progress" hidden>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="ocr-progress-fill"></div>
+                        </div>
+                        <p id="ocr-status">Initializing OCR...</p>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                        <button type="button" id="btn-process-photo" class="btn btn-primary" disabled>Extract Recipe</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast" hidden>
             <span id="toast-message"></span>
@@ -381,7 +462,9 @@ https://cooking.nytimes.com/..."></textarea>
     </div>
 
     <input type="file" id="import-file" accept=".json,.paprikarecipes,.html,.htm" hidden>
+    <input type="file" id="photo-file" accept="image/*" capture="environment" hidden>
 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
