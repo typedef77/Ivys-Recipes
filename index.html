@@ -18,20 +18,7 @@
         <!-- Header with Ivy Banner -->
         <header class="header">
             <div class="header-banner">
-                <div class="logo-container">
-                    <div class="logo-icon">
-                        <!-- Simple ivy leaf outline -->
-                        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20 36C20 36 8 28 8 18C8 12 12 6 20 4C28 6 32 12 32 18C32 28 20 36 20 36Z" stroke="white" stroke-width="2" fill="none"/>
-                            <path d="M20 36V18" stroke="white" stroke-width="1.5"/>
-                            <path d="M20 18C16 14 12 16 10 12" stroke="white" stroke-width="1.5" fill="none"/>
-                            <path d="M20 18C24 14 28 16 30 12" stroke="white" stroke-width="1.5" fill="none"/>
-                            <path d="M20 26C17 23 14 24 12 21" stroke="white" stroke-width="1.5" fill="none"/>
-                            <path d="M20 26C23 23 26 24 28 21" stroke="white" stroke-width="1.5" fill="none"/>
-                        </svg>
-                    </div>
-                    <h1 class="logo">Ivy's Recipes</h1>
-                </div>
+                <h1 class="logo">Ivy's Recipes</h1>
                 <div class="bookmarklet-inline" title="Drag me to your bookmarks bar!">
                     <a id="bookmarklet-drag" href="#" class="bookmarklet-drag-btn">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,6 +30,13 @@
                 </div>
             </div>
             <div class="header-content">
+                <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" aria-label="Toggle sidebar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
                 <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
                 <div class="menu-container">
                     <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
@@ -99,8 +93,10 @@
 
         <!-- Main Layout with Sidebar -->
         <div class="main-layout">
+            <!-- Sidebar overlay for mobile -->
+            <div id="sidebar-overlay" class="sidebar-overlay"></div>
             <!-- Sidebar -->
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
                 <div class="sidebar-search">
                     <input type="text" id="sidebar-search" class="sidebar-search-input" placeholder="Search recipes...">
                 </div>
@@ -132,42 +128,23 @@
                 </div>
 
                 <div class="sidebar-section" id="folders-section">
-                    <div class="sidebar-section-header" data-toggle="folders">
-                        <span class="sidebar-section-title">Folders</span>
-                        <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
+                    <div class="sidebar-section-label">Folders</div>
+                    <div id="sidebar-folders">
+                        <!-- Folders will be populated by JS -->
+                    </div>
+                    <button class="sidebar-item sidebar-item-add" id="btn-add-folder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
-                    </div>
-                    <div class="sidebar-section-content">
-                        <div id="sidebar-folders">
-                            <!-- Folders will be populated by JS -->
-                        </div>
-                        <div class="sidebar-section-footer">
-                            <button class="sidebar-add-btn" id="btn-add-folder">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                New Folder
-                            </button>
-                        </div>
-                    </div>
+                        New Folder
+                    </button>
                 </div>
 
-                <div class="sidebar-section collapsed" id="categories-section">
-                    <div class="sidebar-section-header" data-toggle="categories">
-                        <span class="sidebar-section-title">Categories</span>
-                        <svg class="sidebar-section-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </div>
-                    <div class="sidebar-section-content">
-                        <div class="sidebar-tags" id="sidebar-tags">
-                            <!-- Tags will be populated by JS -->
-                        </div>
-                        <div class="sidebar-section-footer">
-                            <button class="sidebar-see-all" id="btn-see-all-categories">See all categories</button>
-                        </div>
+                <div class="sidebar-section" id="categories-section">
+                    <div class="sidebar-section-label">Categories</div>
+                    <div class="sidebar-tags" id="sidebar-tags">
+                        <!-- Tags will be populated by JS -->
                     </div>
                 </div>
             </aside>
@@ -320,6 +297,27 @@
                 <div class="modal-header">
                     <h2 id="view-title">Recipe Title</h2>
                     <div class="modal-actions">
+                        <div class="view-folder-menu">
+                            <button id="btn-add-to-folder" class="btn btn-icon" aria-label="Add to folder">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                    <line x1="12" y1="11" x2="12" y2="17"></line>
+                                    <line x1="9" y1="14" x2="15" y2="14"></line>
+                                </svg>
+                            </button>
+                            <div id="view-folder-dropdown" class="view-folder-dropdown" hidden>
+                                <div id="view-folder-list">
+                                    <!-- Folders will be populated by JS -->
+                                </div>
+                                <button id="btn-view-new-folder" class="view-folder-item view-folder-new">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Create new folder
+                                </button>
+                            </div>
+                        </div>
                         <button id="btn-edit-recipe" class="btn btn-icon" aria-label="Edit">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>

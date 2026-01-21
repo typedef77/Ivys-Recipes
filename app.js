@@ -549,6 +549,10 @@
         btnSeeAllCategories: document.getElementById('btn-see-all-categories'),
         foldersSection: document.getElementById('folders-section'),
         categoriesSection: document.getElementById('categories-section'),
+        // Sidebar toggle (mobile)
+        sidebar: document.getElementById('sidebar'),
+        sidebarOverlay: document.getElementById('sidebar-overlay'),
+        btnSidebarToggle: document.getElementById('btn-sidebar-toggle'),
         // Header elements
         btnAddRecipe: document.getElementById('btn-add-recipe'),
         btnAddFirst: document.getElementById('btn-add-first'),
@@ -581,6 +585,11 @@
         btnFetchUrl: document.getElementById('btn-fetch-url'),
         modalTitle: document.getElementById('modal-title'),
         imagePreview: document.getElementById('image-preview'),
+        // View folder menu
+        btnAddToFolder: document.getElementById('btn-add-to-folder'),
+        viewFolderDropdown: document.getElementById('view-folder-dropdown'),
+        viewFolderList: document.getElementById('view-folder-list'),
+        btnViewNewFolder: document.getElementById('btn-view-new-folder'),
         // Other
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toast-message'),
@@ -938,6 +947,8 @@
         const folders = getFolders();
         const recipes = getRecipes();
 
+        if (!elements.sidebarFolders) return;
+
         elements.sidebarFolders.innerHTML = folders.map(folder => {
             // Count recipes in this folder
             const count = recipes.filter(r => r.folders && r.folders.includes(folder.id)).length;
@@ -952,6 +963,30 @@
                 </button>
             `;
         }).join('');
+    }
+
+    function populateViewFolderList() {
+        if (!elements.viewFolderList || !currentViewingRecipe) return;
+
+        const folders = getFolders();
+        const recipeFolders = currentViewingRecipe.folders || [];
+
+        elements.viewFolderList.innerHTML = folders.map(folder => {
+            const isInFolder = recipeFolders.includes(folder.id);
+            return `
+                <button class="view-folder-item ${isInFolder ? 'in-folder' : ''}" data-folder-id="${folder.id}">
+                    <svg viewBox="0 0 24 24" fill="${isInFolder ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        ${isInFolder ? '<polyline points="9 11 12 14 22 4" stroke="white" stroke-width="2"></polyline>' : ''}
+                    </svg>
+                    ${escapeHtml(folder.name)}
+                </button>
+            `;
+        }).join('');
+
+        if (folders.length === 0) {
+            elements.viewFolderList.innerHTML = '<p style="padding: 0.5rem 0.75rem; color: var(--color-text-muted); font-size: 0.875rem;">No folders yet</p>';
+        }
     }
 
     function updateSidebarActiveState() {
@@ -1694,13 +1729,13 @@
 
     function resetPhotoImport() {
         selectedPhotoFile = null;
-        elements.photoImportArea.hidden = false;
-        elements.photoPreviewContainer.hidden = true;
-        elements.photoPreview.src = '';
-        elements.ocrProgress.hidden = true;
-        elements.ocrProgressFill.style.width = '0%';
-        elements.btnProcessPhoto.disabled = true;
-        elements.photoFile.value = '';
+        if (elements.photoImportArea) elements.photoImportArea.hidden = false;
+        if (elements.photoPreviewContainer) elements.photoPreviewContainer.hidden = true;
+        if (elements.photoPreview) elements.photoPreview.src = '';
+        if (elements.ocrProgress) elements.ocrProgress.hidden = true;
+        if (elements.ocrProgressFill) elements.ocrProgressFill.style.width = '0%';
+        if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = true;
+        if (elements.photoFile) elements.photoFile.value = '';
     }
 
     function handlePhotoSelect(file) {
@@ -1879,6 +1914,20 @@
             }
         });
 
+        // Sidebar toggle (mobile)
+        if (elements.btnSidebarToggle) {
+            elements.btnSidebarToggle.addEventListener('click', () => {
+                elements.sidebar.classList.toggle('open');
+                elements.sidebarOverlay.classList.toggle('visible');
+            });
+        }
+        if (elements.sidebarOverlay) {
+            elements.sidebarOverlay.addEventListener('click', () => {
+                elements.sidebar.classList.remove('open');
+                elements.sidebarOverlay.classList.remove('visible');
+            });
+        }
+
         // Dropdown actions
         elements.btnImport.addEventListener('click', () => {
             elements.dropdownMenu.hidden = true;
@@ -1905,32 +1954,42 @@
         elements.importFile.addEventListener('change', importRecipes);
 
         // Photo import
-        elements.btnPhotoImport.addEventListener('click', () => {
-            elements.dropdownMenu.hidden = true;
-            openPhotoImportModal();
-        });
-        elements.photoImportArea.addEventListener('click', () => {
-            elements.photoFile.click();
-        });
-        elements.photoImportArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            elements.photoImportArea.style.borderColor = 'var(--color-primary)';
-        });
-        elements.photoImportArea.addEventListener('dragleave', () => {
-            elements.photoImportArea.style.borderColor = '';
-        });
-        elements.photoImportArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            elements.photoImportArea.style.borderColor = '';
-            const file = e.dataTransfer.files[0];
-            handlePhotoSelect(file);
-        });
-        elements.photoFile.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            handlePhotoSelect(file);
-        });
-        elements.btnRemovePhoto.addEventListener('click', resetPhotoImport);
-        elements.btnProcessPhoto.addEventListener('click', processPhotoOCR);
+        if (elements.btnPhotoImport) {
+            elements.btnPhotoImport.addEventListener('click', () => {
+                elements.dropdownMenu.hidden = true;
+                openPhotoImportModal();
+            });
+        }
+        if (elements.photoImportArea) {
+            elements.photoImportArea.addEventListener('click', () => {
+                elements.photoFile.click();
+            });
+            elements.photoImportArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                elements.photoImportArea.style.borderColor = 'var(--color-primary)';
+            });
+            elements.photoImportArea.addEventListener('dragleave', () => {
+                elements.photoImportArea.style.borderColor = '';
+            });
+            elements.photoImportArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                elements.photoImportArea.style.borderColor = '';
+                const file = e.dataTransfer.files[0];
+                handlePhotoSelect(file);
+            });
+        }
+        if (elements.photoFile) {
+            elements.photoFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                handlePhotoSelect(file);
+            });
+        }
+        if (elements.btnRemovePhoto) {
+            elements.btnRemovePhoto.addEventListener('click', resetPhotoImport);
+        }
+        if (elements.btnProcessPhoto) {
+            elements.btnProcessPhoto.addEventListener('click', processPhotoOCR);
+        }
 
         // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
         elements.bookmarkletDrag.addEventListener('click', (e) => {
@@ -2052,6 +2111,58 @@
                 renderRecipes();
                 renderTagsFilter();
                 showToast('Recipe deleted');
+            }
+        });
+
+        // View modal folder dropdown
+        if (elements.btnAddToFolder) {
+            elements.btnAddToFolder.addEventListener('click', (e) => {
+                e.stopPropagation();
+                populateViewFolderList();
+                elements.viewFolderDropdown.hidden = !elements.viewFolderDropdown.hidden;
+            });
+        }
+        if (elements.btnViewNewFolder) {
+            elements.btnViewNewFolder.addEventListener('click', () => {
+                const folderName = prompt('Enter folder name:');
+                if (folderName && folderName.trim()) {
+                    const folder = addFolder(folderName.trim());
+                    if (folder && currentViewingRecipe) {
+                        addRecipeToFolder(currentViewingRecipe.id, folder.id);
+                        showToast(`Added to "${folder.name}"`);
+                        renderFolders();
+                    }
+                }
+                elements.viewFolderDropdown.hidden = true;
+            });
+        }
+        if (elements.viewFolderList) {
+            elements.viewFolderList.addEventListener('click', (e) => {
+                const btn = e.target.closest('.view-folder-item');
+                if (btn && currentViewingRecipe) {
+                    const folderId = btn.dataset.folderId;
+                    const isInFolder = currentViewingRecipe.folders && currentViewingRecipe.folders.includes(folderId);
+                    if (isInFolder) {
+                        removeRecipeFromFolder(currentViewingRecipe.id, folderId);
+                        showToast('Removed from folder');
+                    } else {
+                        addRecipeToFolder(currentViewingRecipe.id, folderId);
+                        showToast('Added to folder');
+                    }
+                    // Update current viewing recipe
+                    currentViewingRecipe = getRecipeById(currentViewingRecipe.id);
+                    populateViewFolderList();
+                    renderFolders();
+                }
+            });
+        }
+
+        // Close folder dropdown when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (elements.viewFolderDropdown && !elements.viewFolderDropdown.hidden) {
+                if (!e.target.closest('.view-folder-menu')) {
+                    elements.viewFolderDropdown.hidden = true;
+                }
             }
         });
 
