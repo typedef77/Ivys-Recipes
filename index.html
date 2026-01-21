@@ -30,13 +30,6 @@
                 </div>
             </div>
             <div class="header-content">
-                <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" aria-label="Toggle sidebar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="12" x2="21" y2="12"></line>
-                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                        <line x1="3" y1="18" x2="21" y2="18"></line>
-                    </svg>
-                </button>
                 <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
                 <div class="menu-container">
                     <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
@@ -65,11 +58,10 @@
                         </button>
                         <button id="btn-photo-import" class="dropdown-item">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                <polyline points="21 15 16 10 5 21"></polyline>
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                             </svg>
-                            Import from Photo
+                            Add Cookbook Recipe
                         </button>
                         <button id="btn-export" class="dropdown-item">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -94,6 +86,12 @@
         <!-- Main Layout with Sidebar -->
         <div class="main-layout">
             <!-- Sidebar overlay for mobile -->
+            <!-- Sidebar toggle (for smaller screens) -->
+            <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" aria-label="Toggle sidebar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
             <div id="sidebar-overlay" class="sidebar-overlay"></div>
             <!-- Sidebar -->
             <aside class="sidebar" id="sidebar">
@@ -222,9 +220,19 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="recipe-image">Image URL</label>
-                            <input type="url" id="recipe-image" placeholder="https://...">
+                            <label for="recipe-image">Image</label>
+                            <div class="image-input-row">
+                                <input type="text" id="recipe-image" placeholder="Paste URL or upload...">
+                                <button type="button" id="btn-upload-image" class="btn btn-secondary btn-sm" title="Upload image">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                </button>
+                            </div>
                             <div id="image-preview" class="image-preview" hidden></div>
+                            <input type="file" id="recipe-image-file" accept="image/*" hidden>
                         </div>
 
                         <div class="form-row">
@@ -277,8 +285,8 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="recipe-source">Source URL</label>
-                            <input type="url" id="recipe-source" placeholder="Original recipe link">
+                            <label for="recipe-source">Source (searchable)</label>
+                            <input type="text" id="recipe-source" placeholder="e.g., NYT Cooking, Smitten Kitchen, or URL">
                         </div>
 
                         <div class="form-actions">
@@ -412,12 +420,12 @@ https://cooking.nytimes.com/..."></textarea>
             </div>
         </div>
 
-        <!-- Photo Import Modal -->
+        <!-- Cookbook Recipe Import Modal -->
         <div id="modal-photo-import" class="modal" hidden>
             <div class="modal-backdrop"></div>
             <div class="modal-content modal-medium">
                 <div class="modal-header">
-                    <h2>Import from Photo</h2>
+                    <h2>Add Cookbook Recipe</h2>
                     <button class="btn btn-icon modal-close" aria-label="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 6 6 18M6 6l12 12"></path>
@@ -425,29 +433,23 @@ https://cooking.nytimes.com/..."></textarea>
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p class="help-text">Take a photo of a recipe or upload an image to extract the recipe text.</p>
+                    <p class="help-text">Upload a photo of the recipe from your cookbook. You'll enter the details on the next screen.</p>
                     <div class="photo-import-area" id="photo-import-area">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                             <circle cx="8.5" cy="8.5" r="1.5"></circle>
                             <polyline points="21 15 16 10 5 21"></polyline>
                         </svg>
-                        <p>Click to select or drop an image here</p>
+                        <p>Click to select or drop a photo</p>
                         <p class="help-text">Supports JPG, PNG, WebP</p>
                     </div>
                     <div id="photo-preview-container" hidden>
                         <img id="photo-preview" alt="Recipe photo preview">
-                        <button type="button" id="btn-remove-photo" class="btn btn-secondary btn-sm">Remove</button>
-                    </div>
-                    <div id="ocr-progress" hidden>
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="ocr-progress-fill"></div>
-                        </div>
-                        <p id="ocr-status">Initializing OCR...</p>
+                        <button type="button" id="btn-remove-photo" class="btn btn-secondary btn-sm">Change Photo</button>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary modal-close">Cancel</button>
-                        <button type="button" id="btn-process-photo" class="btn btn-primary" disabled>Extract Recipe</button>
+                        <button type="button" id="btn-process-photo" class="btn btn-primary" disabled>Continue</button>
                     </div>
                 </div>
             </div>
@@ -462,7 +464,6 @@ https://cooking.nytimes.com/..."></textarea>
     <input type="file" id="import-file" accept=".json,.paprikarecipes,.html,.htm" hidden>
     <input type="file" id="photo-file" accept="image/*" capture="environment" hidden>
 
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

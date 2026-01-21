@@ -1,13 +1,12 @@
 // Ivy's Recipes - Service Worker
-const CACHE_NAME = 'ivys-recipes-v11';
+const CACHE_NAME = 'ivys-recipes-v12';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/styles.css',
     '/app.js',
     '/manifest.json',
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap',
-    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap'
 ];
 
 // Install event - cache assets
