@@ -126,6 +126,30 @@
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }
 
+    function findDuplicate(title, source, excludeId = null) {
+        const recipes = getRecipes();
+        const normalizedTitle = title.toLowerCase().trim();
+        const normalizedSource = source ? source.toLowerCase().trim() : '';
+
+        return recipes.find(r => {
+            if (excludeId && r.id === excludeId) return false;
+
+            // Check by source URL first (most reliable)
+            if (normalizedSource && r.source) {
+                const existingSource = r.source.toLowerCase().trim();
+                // Compare URLs without trailing slashes and query params for better matching
+                const cleanNew = normalizedSource.split('?')[0].replace(/\/+$/, '');
+                const cleanExisting = existingSource.split('?')[0].replace(/\/+$/, '');
+                if (cleanNew === cleanExisting) return true;
+            }
+
+            // Check by title (case-insensitive)
+            if (r.title && r.title.toLowerCase().trim() === normalizedTitle) return true;
+
+            return false;
+        });
+    }
+
     // ============================================
     // Recipe CRUD Operations
     // ============================================
@@ -517,23 +541,40 @@
         // Sidebar elements
         sidebarSearch: document.getElementById('sidebar-search'),
         sidebarTags: document.getElementById('sidebar-tags'),
+        sidebarFolders: document.getElementById('sidebar-folders'),
         countAll: document.getElementById('count-all'),
         contentTitle: document.getElementById('content-title'),
         recipeCount: document.getElementById('recipe-count'),
+        btnAddFolder: document.getElementById('btn-add-folder'),
+        btnSeeAllCategories: document.getElementById('btn-see-all-categories'),
+        foldersSection: document.getElementById('folders-section'),
+        categoriesSection: document.getElementById('categories-section'),
         // Header elements
         btnAddRecipe: document.getElementById('btn-add-recipe'),
         btnAddFirst: document.getElementById('btn-add-first'),
         btnMenu: document.getElementById('btn-menu'),
         dropdownMenu: document.getElementById('dropdown-menu'),
+        btnPhotoImport: document.getElementById('btn-photo-import'),
         // Modals
         modalRecipe: document.getElementById('modal-recipe'),
         modalView: document.getElementById('modal-view'),
         modalBulkImport: document.getElementById('modal-bulk-import'),
         modalFailedUrls: document.getElementById('modal-failed-urls'),
+        modalPhotoImport: document.getElementById('modal-photo-import'),
         failedUrlsList: document.getElementById('failed-urls-list'),
         bulkUrls: document.getElementById('bulk-urls'),
         btnBulkImport: document.getElementById('btn-bulk-import'),
         btnDoBulkImport: document.getElementById('btn-do-bulk-import'),
+        // Photo import elements
+        photoImportArea: document.getElementById('photo-import-area'),
+        photoPreviewContainer: document.getElementById('photo-preview-container'),
+        photoPreview: document.getElementById('photo-preview'),
+        btnRemovePhoto: document.getElementById('btn-remove-photo'),
+        btnProcessPhoto: document.getElementById('btn-process-photo'),
+        ocrProgress: document.getElementById('ocr-progress'),
+        ocrProgressFill: document.getElementById('ocr-progress-fill'),
+        ocrStatus: document.getElementById('ocr-status'),
+        photoFile: document.getElementById('photo-file'),
         // Form elements
         recipeForm: document.getElementById('recipe-form'),
         recipeUrl: document.getElementById('recipe-url'),
@@ -549,6 +590,9 @@
         importFile: document.getElementById('import-file'),
         bookmarkletDrag: document.getElementById('bookmarklet-drag')
     };
+
+    // Track open card menus
+    let openCardMenu = null;
 
     // Current state
     let currentFilter = 'all';
@@ -567,7 +611,7 @@
         // Sort by recently added first (default behavior)
         filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-        // Apply sidebar filter (all, recent, favorites, or tag)
+        // Apply sidebar filter (all, recent, favorites, folder, or tag)
         if (currentFilter === 'recent') {
             // Show recipes from last 7 days
             const oneWeekAgo = new Date();
@@ -575,6 +619,10 @@
             filtered = filtered.filter(r => new Date(r.createdAt) >= oneWeekAgo);
         } else if (currentFilter === 'favorites') {
             filtered = filtered.filter(r => r.favorite);
+        } else if (currentFilter.startsWith('folder:')) {
+            // Folder filter
+            const folderId = currentFilter.replace('folder:', '');
+            filtered = filtered.filter(r => r.folders && r.folders.includes(folderId));
         } else if (currentFilter !== 'all') {
             // Tag filter
             filtered = filtered.filter(r =>
@@ -603,6 +651,10 @@
             titleText = 'Recently Added';
         } else if (currentFilter === 'favorites') {
             titleText = 'Favorites';
+        } else if (currentFilter.startsWith('folder:')) {
+            const folderId = currentFilter.replace('folder:', '');
+            const folder = getFolders().find(f => f.id === folderId);
+            titleText = folder ? folder.name : 'Folder';
         } else if (currentFilter !== 'all') {
             titleText = currentFilter;
         }
@@ -640,25 +692,66 @@
             sourceName = getSourceName(recipe.source);
         }
 
+        // Build folder options for dropdown
+        const folders = getFolders();
+        const folderOptions = folders.map(f => `
+            <button class="card-dropdown-item" data-action="add-to-folder" data-folder-id="${f.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                ${escapeHtml(f.name)}
+            </button>
+        `).join('');
+
         // Image section with overlay buttons
-        let imageHtml;
         const isFavorite = recipe.favorite ? 'active' : '';
         const overlayButtons = `
             <div class="card-overlay-buttons">
                 <button class="card-btn card-btn-favorite ${isFavorite}" data-action="favorite" title="Favorite">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="${recipe.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="${recipe.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                     </svg>
                 </button>
-                <button class="card-btn card-btn-edit" data-action="edit" title="Edit">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                </button>
+                <div class="card-menu-container">
+                    <button class="card-btn card-btn-menu" data-action="toggle-menu" title="More options">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2"></circle>
+                            <circle cx="12" cy="12" r="2"></circle>
+                            <circle cx="12" cy="19" r="2"></circle>
+                        </svg>
+                    </button>
+                    <div class="card-dropdown" hidden>
+                        <button class="card-dropdown-item" data-action="edit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit
+                        </button>
+                        ${folders.length > 0 ? `<div class="card-dropdown-divider"></div>` : ''}
+                        ${folderOptions}
+                        <button class="card-dropdown-item" data-action="new-folder">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <line x1="9" y1="14" x2="15" y2="14"></line>
+                            </svg>
+                            Add to new folder...
+                        </button>
+                        <div class="card-dropdown-divider"></div>
+                        <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
 
+        let imageHtml;
         if (recipe.image) {
             imageHtml = `
                 <div class="recipe-card-image-container">
@@ -694,23 +787,11 @@
             metaParts.push(`<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>${escapeHtml(recipe.servings)}</span>`);
         }
 
-        // Tags - show first 2, then "more" button if there are additional tags
-        const allTags = recipe.tags || [];
-        const visibleTags = allTags.slice(0, 2);
-        const hiddenCount = allTags.length - 2;
-        let tagsHtml = visibleTags.map(tag =>
-            `<span class="recipe-card-tag">${escapeHtml(tag)}</span>`
-        ).join('');
-        if (hiddenCount > 0) {
-            tagsHtml += `<span class="recipe-card-tag more-tags">+${hiddenCount} more</span>`;
-        }
-
         card.innerHTML = `
             ${imageHtml}
             <div class="recipe-card-content">
                 <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
                 ${metaParts.length ? `<div class="recipe-card-meta">${metaParts.join('')}</div>` : ''}
-                ${tagsHtml ? `<div class="recipe-card-tags">${tagsHtml}</div>` : ''}
             </div>
         `;
 
@@ -719,10 +800,38 @@
             const btn = e.target.closest('[data-action]');
             if (btn) {
                 e.stopPropagation();
-                if (btn.dataset.action === 'favorite') {
+                const action = btn.dataset.action;
+
+                if (action === 'favorite') {
                     toggleFavorite(recipe.id);
-                } else if (btn.dataset.action === 'edit') {
+                } else if (action === 'toggle-menu') {
+                    toggleCardMenu(card);
+                } else if (action === 'edit') {
+                    closeAllCardMenus();
                     openEditModal(recipe.id);
+                } else if (action === 'delete') {
+                    closeAllCardMenus();
+                    if (confirm('Are you sure you want to delete this recipe?')) {
+                        deleteRecipe(recipe.id);
+                    }
+                } else if (action === 'add-to-folder') {
+                    closeAllCardMenus();
+                    const folderId = btn.dataset.folderId;
+                    addRecipeToFolder(recipe.id, folderId);
+                    showToast('Added to folder');
+                } else if (action === 'new-folder') {
+                    closeAllCardMenus();
+                    const folderName = prompt('Enter folder name:');
+                    if (folderName && folderName.trim()) {
+                        const folder = addFolder(folderName.trim());
+                        if (folder) {
+                            addRecipeToFolder(recipe.id, folder.id);
+                            renderFolders();
+                            showToast(`Added to "${folder.name}"`);
+                        } else {
+                            showToast('Folder already exists');
+                        }
+                    }
                 }
             } else {
                 openViewModal(recipe.id);
@@ -730,6 +839,35 @@
         });
 
         return card;
+    }
+
+    function toggleCardMenu(card) {
+        const dropdown = card.querySelector('.card-dropdown');
+        const wasOpen = !dropdown.hidden;
+
+        closeAllCardMenus();
+
+        if (!wasOpen) {
+            dropdown.hidden = false;
+            openCardMenu = dropdown;
+        }
+    }
+
+    function closeAllCardMenus() {
+        document.querySelectorAll('.card-dropdown').forEach(d => d.hidden = true);
+        openCardMenu = null;
+    }
+
+    function deleteRecipe(id) {
+        const recipes = getRecipes();
+        const index = recipes.findIndex(r => r.id === id);
+        if (index !== -1) {
+            recipes.splice(index, 1);
+            saveRecipes(recipes);
+            renderRecipes();
+            renderTagsFilter();
+            showToast('Recipe deleted');
+        }
     }
 
     function getSourceName(url) {
@@ -780,8 +918,9 @@
 
     function renderTagsFilter() {
         const tags = getAllTags();
-        // Render tags as sidebar items
-        elements.sidebarTags.innerHTML = tags.map(tag => `
+        // Show only first 5 tags by default
+        const displayTags = tags.slice(0, 5);
+        elements.sidebarTags.innerHTML = displayTags.map(tag => `
             <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -795,12 +934,39 @@
         updateSidebarActiveState();
     }
 
+    function renderFolders() {
+        const folders = getFolders();
+        const recipes = getRecipes();
+
+        elements.sidebarFolders.innerHTML = folders.map(folder => {
+            // Count recipes in this folder
+            const count = recipes.filter(r => r.folders && r.folders.includes(folder.id)).length;
+            const isActive = currentFilter === `folder:${folder.id}`;
+            return `
+                <button class="sidebar-item ${isActive ? 'active' : ''}" data-filter="folder:${folder.id}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    ${escapeHtml(folder.name)}
+                    <span class="sidebar-item-count">${count}</span>
+                </button>
+            `;
+        }).join('');
+    }
+
     function updateSidebarActiveState() {
-        // Update Library section items
+        // Update all sidebar items
         document.querySelectorAll('.sidebar-item[data-filter]').forEach(item => {
             const filter = item.dataset.filter;
             item.classList.toggle('active', filter === currentFilter);
         });
+    }
+
+    function toggleSidebarSection(sectionId) {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            section.classList.toggle('collapsed');
+        }
     }
 
     // ============================================
@@ -932,6 +1098,7 @@
         closeModal(elements.modalView);
         closeModal(elements.modalBulkImport);
         closeModal(elements.modalFailedUrls);
+        closeModal(elements.modalPhotoImport);
     }
 
     // ============================================
@@ -943,15 +1110,15 @@
 
         const id = document.getElementById('recipe-id').value;
         const recipe = {
-            title: document.getElementById('recipe-title').value.trim(),
+            title: normalizeTitle(document.getElementById('recipe-title').value),
             image: document.getElementById('recipe-image').value.trim(),
             servings: document.getElementById('recipe-servings').value.trim(),
             prepTime: document.getElementById('recipe-prep-time').value.trim(),
             cookTime: document.getElementById('recipe-cook-time').value.trim(),
-            tags: document.getElementById('recipe-tags').value
+            tags: cleanTags(document.getElementById('recipe-tags').value
                 .split(',')
                 .map(t => t.trim())
-                .filter(Boolean),
+                .filter(Boolean)),
             ingredients: document.getElementById('recipe-ingredients').value.trim(),
             instructions: document.getElementById('recipe-instructions').value.trim(),
             notes: document.getElementById('recipe-notes').value.trim(),
@@ -959,9 +1126,23 @@
         };
 
         if (id) {
+            // Check for duplicates when updating (exclude current recipe)
+            const duplicate = findDuplicate(recipe.title, recipe.source, id);
+            if (duplicate) {
+                if (!confirm(`A recipe with a similar title or source already exists: "${duplicate.title}". Continue updating anyway?`)) {
+                    return;
+                }
+            }
             updateRecipe(id, recipe);
             showToast('Recipe updated!');
         } else {
+            // Check for duplicates when adding new
+            const duplicate = findDuplicate(recipe.title, recipe.source);
+            if (duplicate) {
+                if (!confirm(`A recipe with a similar title or source already exists: "${duplicate.title}". Add anyway?`)) {
+                    return;
+                }
+            }
             addRecipe(recipe);
             showToast('Recipe saved!');
         }
@@ -969,6 +1150,7 @@
         closeModal(elements.modalRecipe);
         renderRecipes();
         renderTagsFilter();
+        renderFolders();
     }
 
     async function handleFetchUrl() {
@@ -985,12 +1167,12 @@
             const recipe = await fetchRecipeFromUrl(url);
 
             // Populate form
-            document.getElementById('recipe-title').value = recipe.title || '';
+            document.getElementById('recipe-title').value = normalizeTitle(recipe.title) || '';
             document.getElementById('recipe-image').value = recipe.image || '';
             document.getElementById('recipe-servings').value = recipe.servings || '';
             document.getElementById('recipe-prep-time').value = recipe.prepTime || '';
             document.getElementById('recipe-cook-time').value = recipe.cookTime || '';
-            document.getElementById('recipe-tags').value = (recipe.tags || []).join(', ');
+            document.getElementById('recipe-tags').value = cleanTags(recipe.tags || []).join(', ');
             document.getElementById('recipe-ingredients').value = recipe.ingredients || '';
             document.getElementById('recipe-instructions').value = recipe.instructions || '';
             document.getElementById('recipe-source').value = recipe.source || url;
@@ -1417,6 +1599,26 @@
             .join(' ');
     }
 
+    function normalizeTitle(title) {
+        if (!title) return '';
+        // Title case conversion, keeping small words lowercase unless first/last
+        const smallWords = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'with'];
+        const words = title.trim().split(/\s+/);
+        return words.map((word, i) => {
+            const lower = word.toLowerCase();
+            // Always capitalize first and last word
+            if (i === 0 || i === words.length - 1) {
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }
+            // Keep small words lowercase
+            if (smallWords.includes(lower)) {
+                return lower;
+            }
+            // Capitalize other words
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join(' ');
+    }
+
     function showToast(message) {
         elements.toastMessage.textContent = message;
         elements.toast.hidden = false;
@@ -1480,6 +1682,182 @@
     }
 
     // ============================================
+    // Photo Import / OCR
+    // ============================================
+
+    let selectedPhotoFile = null;
+
+    function openPhotoImportModal() {
+        resetPhotoImport();
+        openModal(elements.modalPhotoImport);
+    }
+
+    function resetPhotoImport() {
+        selectedPhotoFile = null;
+        elements.photoImportArea.hidden = false;
+        elements.photoPreviewContainer.hidden = true;
+        elements.photoPreview.src = '';
+        elements.ocrProgress.hidden = true;
+        elements.ocrProgressFill.style.width = '0%';
+        elements.btnProcessPhoto.disabled = true;
+        elements.photoFile.value = '';
+    }
+
+    function handlePhotoSelect(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            showToast('Please select an image file');
+            return;
+        }
+
+        selectedPhotoFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            elements.photoPreview.src = e.target.result;
+            elements.photoImportArea.hidden = true;
+            elements.photoPreviewContainer.hidden = false;
+            elements.btnProcessPhoto.disabled = false;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function processPhotoOCR() {
+        if (!selectedPhotoFile) return;
+
+        elements.btnProcessPhoto.disabled = true;
+        elements.ocrProgress.hidden = false;
+        elements.ocrStatus.textContent = 'Loading OCR engine...';
+        elements.ocrProgressFill.style.width = '10%';
+
+        try {
+            // Check if Tesseract is available
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('OCR library not loaded. Please check your internet connection.');
+            }
+
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        const progress = 20 + (m.progress * 70);
+                        elements.ocrProgressFill.style.width = `${progress}%`;
+                        elements.ocrStatus.textContent = `Recognizing text... ${Math.round(m.progress * 100)}%`;
+                    }
+                }
+            });
+
+            elements.ocrStatus.textContent = 'Processing image...';
+            elements.ocrProgressFill.style.width = '20%';
+
+            const result = await worker.recognize(selectedPhotoFile);
+            const extractedText = result.data.text;
+
+            await worker.terminate();
+
+            elements.ocrProgressFill.style.width = '100%';
+            elements.ocrStatus.textContent = 'Complete!';
+
+            // Parse the extracted text
+            const parsedRecipe = parseRecipeText(extractedText);
+
+            // Close photo modal and open recipe form
+            closeModal(elements.modalPhotoImport);
+            openAddModal();
+
+            // Pre-fill the form with extracted data
+            if (parsedRecipe.title) {
+                document.getElementById('recipe-title').value = normalizeTitle(parsedRecipe.title);
+            }
+            if (parsedRecipe.ingredients) {
+                document.getElementById('recipe-ingredients').value = parsedRecipe.ingredients;
+            }
+            if (parsedRecipe.instructions) {
+                document.getElementById('recipe-instructions').value = parsedRecipe.instructions;
+            }
+            if (parsedRecipe.servings) {
+                document.getElementById('recipe-servings').value = parsedRecipe.servings;
+            }
+            if (parsedRecipe.prepTime) {
+                document.getElementById('recipe-prep-time').value = parsedRecipe.prepTime;
+            }
+            if (parsedRecipe.cookTime) {
+                document.getElementById('recipe-cook-time').value = parsedRecipe.cookTime;
+            }
+
+            showToast('Text extracted! Review and edit as needed.');
+
+        } catch (error) {
+            console.error('OCR Error:', error);
+            showToast(error.message || 'Failed to process image');
+            elements.btnProcessPhoto.disabled = false;
+        }
+    }
+
+    function parseRecipeText(text) {
+        // Basic recipe parsing from OCR text
+        const result = {
+            title: '',
+            ingredients: '',
+            instructions: '',
+            servings: '',
+            prepTime: '',
+            cookTime: ''
+        };
+
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length === 0) return result;
+
+        // Try to identify title (usually first significant line)
+        const titleLine = lines.find(l => l.length > 3 && l.length < 100 && !/^(ingredients|instructions|directions|method|serves|prep|cook)/i.test(l));
+        if (titleLine) {
+            result.title = titleLine;
+        }
+
+        // Look for serving/time info
+        const servingsMatch = text.match(/serves?\s*:?\s*(\d+[-–]?\d*)/i);
+        if (servingsMatch) {
+            result.servings = servingsMatch[1];
+        }
+
+        const prepMatch = text.match(/prep(?:\s*time)?\s*:?\s*(\d+\s*(?:min|hour|hr|m|h)[\w\s]*)/i);
+        if (prepMatch) {
+            result.prepTime = prepMatch[1].trim();
+        }
+
+        const cookMatch = text.match(/cook(?:ing)?\s*(?:time)?\s*:?\s*(\d+\s*(?:min|hour|hr|m|h)[\w\s]*)/i);
+        if (cookMatch) {
+            result.cookTime = cookMatch[1].trim();
+        }
+
+        // Try to find ingredients section
+        const ingredientsStart = lines.findIndex(l => /^ingredients?\s*:?$/i.test(l));
+        const instructionsStart = lines.findIndex(l => /^(instructions?|directions?|method|steps?)\s*:?$/i.test(l));
+
+        if (ingredientsStart !== -1) {
+            const endIndex = instructionsStart !== -1 && instructionsStart > ingredientsStart
+                ? instructionsStart
+                : lines.length;
+            const ingredientLines = lines.slice(ingredientsStart + 1, endIndex)
+                .filter(l => !(/^(instructions?|directions?|method|steps?)\s*:?$/i.test(l)));
+            result.ingredients = ingredientLines.join('\n');
+        }
+
+        if (instructionsStart !== -1) {
+            const instructionLines = lines.slice(instructionsStart + 1)
+                .filter(l => l.length > 0);
+            result.instructions = instructionLines.join('\n');
+        }
+
+        // If no clear sections found, make a best guess
+        if (!result.ingredients && !result.instructions) {
+            // Assume first half might be ingredients, second half instructions
+            const midpoint = Math.floor(lines.length / 2);
+            result.ingredients = lines.slice(1, midpoint).join('\n');
+            result.instructions = lines.slice(midpoint).join('\n');
+        }
+
+        return result;
+    }
+
+    // ============================================
     // Event Listeners
     // ============================================
 
@@ -1526,6 +1904,34 @@
         });
         elements.importFile.addEventListener('change', importRecipes);
 
+        // Photo import
+        elements.btnPhotoImport.addEventListener('click', () => {
+            elements.dropdownMenu.hidden = true;
+            openPhotoImportModal();
+        });
+        elements.photoImportArea.addEventListener('click', () => {
+            elements.photoFile.click();
+        });
+        elements.photoImportArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            elements.photoImportArea.style.borderColor = 'var(--color-primary)';
+        });
+        elements.photoImportArea.addEventListener('dragleave', () => {
+            elements.photoImportArea.style.borderColor = '';
+        });
+        elements.photoImportArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            elements.photoImportArea.style.borderColor = '';
+            const file = e.dataTransfer.files[0];
+            handlePhotoSelect(file);
+        });
+        elements.photoFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handlePhotoSelect(file);
+        });
+        elements.btnRemovePhoto.addEventListener('click', resetPhotoImport);
+        elements.btnProcessPhoto.addEventListener('click', processPhotoOCR);
+
         // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
         elements.bookmarkletDrag.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1542,11 +1948,64 @@
             });
         });
 
+        // Sidebar section toggles
+        document.querySelectorAll('.sidebar-section-header[data-toggle]').forEach(header => {
+            header.addEventListener('click', () => {
+                const sectionId = header.dataset.toggle + '-section';
+                toggleSidebarSection(sectionId);
+            });
+        });
+
         // Sidebar tags - use event delegation since tags are rendered dynamically
         elements.sidebarTags.addEventListener('click', (e) => {
             const item = e.target.closest('.sidebar-item');
             if (item && item.dataset.filter) {
                 handleSidebarFilter(item.dataset.filter);
+            }
+        });
+
+        // Sidebar folders - use event delegation
+        elements.sidebarFolders.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-item');
+            if (item && item.dataset.filter) {
+                handleSidebarFilter(item.dataset.filter);
+            }
+        });
+
+        // Add folder button
+        elements.btnAddFolder.addEventListener('click', () => {
+            const folderName = prompt('Enter folder name:');
+            if (folderName && folderName.trim()) {
+                const folder = addFolder(folderName.trim());
+                if (folder) {
+                    renderFolders();
+                    showToast(`Created folder "${folder.name}"`);
+                } else {
+                    showToast('Folder already exists');
+                }
+            }
+        });
+
+        // See all categories button
+        elements.btnSeeAllCategories.addEventListener('click', () => {
+            // Expand the categories section and show all tags
+            elements.categoriesSection.classList.remove('collapsed');
+            const tags = getAllTags();
+            elements.sidebarTags.innerHTML = tags.map(tag => `
+                <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                    ${escapeHtml(tag)}
+                </button>
+            `).join('');
+        });
+
+        // Close card menus when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.card-menu-container')) {
+                closeAllCardMenus();
             }
         });
 
@@ -1580,8 +2039,9 @@
         // View modal actions
         document.getElementById('btn-edit-recipe').addEventListener('click', () => {
             if (currentViewingRecipe) {
+                const recipeId = currentViewingRecipe.id;
                 closeModal(elements.modalView);
-                openEditModal(currentViewingRecipe.id);
+                openEditModal(recipeId);
             }
         });
 
@@ -1644,6 +2104,7 @@
     function init() {
         renderRecipes();
         renderTagsFilter();
+        renderFolders();
         setupEventListeners();
         setupBookmarklet();
         checkUrlParams();
