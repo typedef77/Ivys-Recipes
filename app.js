@@ -15,21 +15,6 @@
         try {
             const data = localStorage.getItem(STORAGE_KEY);
             let recipes = data ? JSON.parse(data) : [];
-            // Migrate/clean tags on load
-            let needsSave = false;
-            recipes = recipes.map(recipe => {
-                if (recipe.tags && recipe.tags.length > 0) {
-                    const cleanedTags = cleanTags(recipe.tags);
-                    if (JSON.stringify(cleanedTags) !== JSON.stringify(recipe.tags)) {
-                        recipe.tags = cleanedTags;
-                        needsSave = true;
-                    }
-                }
-                return recipe;
-            });
-            if (needsSave) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
-            }
             return recipes;
         } catch (e) {
             console.error('Error reading recipes:', e);
@@ -39,16 +24,13 @@
 
     function cleanTags(tags) {
         if (!tags || !Array.isArray(tags)) return [];
-        // Flatten any comma-separated tags, dedupe case-insensitively, capitalize properly
         const allTags = [];
         tags.forEach(tag => {
             if (typeof tag === 'string') {
-                // Split by comma, semicolon, or slash
                 const parts = tag.split(/[,;\/]/).map(t => t.trim()).filter(Boolean);
                 allTags.push(...parts);
             }
         });
-        // Deduplicate case-insensitively
         const seen = new Map();
         allTags.forEach(tag => {
             const lower = tag.toLowerCase().trim();
@@ -80,7 +62,7 @@
     function addFolder(name) {
         const folders = getFolders();
         if (folders.some(f => f.name.toLowerCase() === name.toLowerCase())) {
-            return null; // Already exists
+            return null;
         }
         const folder = {
             id: generateId(),
@@ -126,30 +108,6 @@
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }
 
-    function findDuplicate(title, source, excludeId = null) {
-        const recipes = getRecipes();
-        const normalizedTitle = title.toLowerCase().trim();
-        const normalizedSource = source ? source.toLowerCase().trim() : '';
-
-        return recipes.find(r => {
-            if (excludeId && r.id === excludeId) return false;
-
-            // Check by source URL first (most reliable)
-            if (normalizedSource && r.source) {
-                const existingSource = r.source.toLowerCase().trim();
-                // Compare URLs without trailing slashes and query params for better matching
-                const cleanNew = normalizedSource.split('?')[0].replace(/\/+$/, '');
-                const cleanExisting = existingSource.split('?')[0].replace(/\/+$/, '');
-                if (cleanNew === cleanExisting) return true;
-            }
-
-            // Check by title (case-insensitive)
-            if (r.title && r.title.toLowerCase().trim() === normalizedTitle) return true;
-
-            return false;
-        });
-    }
-
     // ============================================
     // Recipe CRUD Operations
     // ============================================
@@ -175,7 +133,7 @@
         return null;
     }
 
-    function deleteRecipe(id) {
+    function deleteRecipeById(id) {
         const recipes = getRecipes();
         const filtered = recipes.filter(r => r.id !== id);
         saveRecipes(filtered);
@@ -218,7 +176,7 @@
             try {
                 const proxyUrl = makeProxyUrl(url);
                 const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                const timeout = setTimeout(() => controller.abort(), 15000);
 
                 const response = await fetch(proxyUrl, {
                     signal: controller.signal,
@@ -245,7 +203,7 @@
             } catch (error) {
                 lastError = error;
                 console.warn(`Proxy failed for ${url}:`, error.message);
-                continue; // Try next proxy
+                continue;
             }
         }
 
@@ -269,7 +227,6 @@
             tags: []
         };
 
-        // Try to find JSON-LD schema first (most reliable)
         const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
         for (const script of jsonLdScripts) {
             try {
@@ -277,7 +234,6 @@
                 const recipeData = findRecipeInJsonLd(data);
                 if (recipeData) {
                     extractFromJsonLd(recipeData, recipe);
-                    // If no image from JSON-LD, try to find one in the page
                     if (!recipe.image) {
                         recipe.image = findBestImage(doc);
                     }
@@ -288,14 +244,12 @@
             }
         }
 
-        // Fallback: Try microdata
         const microdataRecipe = doc.querySelector('[itemtype*="Recipe"]');
         if (microdataRecipe) {
             extractFromMicrodata(microdataRecipe, recipe);
             if (recipe.title) return recipe;
         }
 
-        // Fallback: Try common selectors
         extractFromCommonSelectors(doc, recipe);
 
         return recipe;
@@ -322,7 +276,6 @@
     function extractFromJsonLd(data, recipe) {
         recipe.title = data.name || '';
 
-        // Image
         if (data.image) {
             if (typeof data.image === 'string') {
                 recipe.image = data.image;
@@ -333,23 +286,19 @@
             }
         }
 
-        // Servings
         if (data.recipeYield) {
             recipe.servings = Array.isArray(data.recipeYield)
                 ? data.recipeYield[0]
                 : data.recipeYield;
         }
 
-        // Times
         recipe.prepTime = formatDuration(data.prepTime);
         recipe.cookTime = formatDuration(data.cookTime) || formatDuration(data.totalTime);
 
-        // Ingredients
         if (data.recipeIngredient && Array.isArray(data.recipeIngredient)) {
             recipe.ingredients = data.recipeIngredient.join('\n');
         }
 
-        // Instructions
         if (data.recipeInstructions) {
             if (typeof data.recipeInstructions === 'string') {
                 recipe.instructions = data.recipeInstructions;
@@ -370,13 +319,11 @@
             }
         }
 
-        // Category/tags
         if (data.recipeCategory) {
             const categories = Array.isArray(data.recipeCategory)
                 ? data.recipeCategory
                 : [data.recipeCategory];
             categories.forEach(cat => {
-                // Split by comma in case multiple tags are in one string
                 const splitTags = String(cat).split(/[,;]/).map(t => t.trim()).filter(Boolean);
                 recipe.tags.push(...splitTags);
             });
@@ -392,15 +339,6 @@
             });
         }
 
-        // Also check keywords
-        if (data.keywords) {
-            const keywords = Array.isArray(data.keywords)
-                ? data.keywords
-                : String(data.keywords).split(/[,;]/).map(t => t.trim());
-            recipe.tags.push(...keywords.filter(Boolean));
-        }
-
-        // Deduplicate and properly capitalize tags
         recipe.tags = [...new Set(recipe.tags.map(t => t.toLowerCase().trim()))].map(t =>
             capitalizeTag(t)
         ).filter(Boolean);
@@ -408,8 +346,6 @@
 
     function formatDuration(isoDuration) {
         if (!isoDuration) return '';
-
-        // Parse ISO 8601 duration (e.g., "PT30M", "PT1H30M")
         const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
         if (!match) return isoDuration;
 
@@ -446,31 +382,23 @@
     }
 
     function extractFromCommonSelectors(doc, recipe) {
-        // Title
         recipe.title = doc.querySelector('h1')?.textContent?.trim() ||
                        doc.querySelector('.recipe-title')?.textContent?.trim() ||
-                       doc.querySelector('[class*="title"]')?.textContent?.trim() ||
                        doc.title || '';
 
-        // Image - try many sources
         if (!recipe.image) {
             recipe.image = findBestImage(doc);
         }
 
-        // Try to find ingredients list
         const ingredientsList = doc.querySelector('.ingredients') ||
-                               doc.querySelector('[class*="ingredient"]') ||
-                               doc.querySelector('.recipe-ingredients');
+                               doc.querySelector('[class*="ingredient"]');
         if (ingredientsList) {
             const items = ingredientsList.querySelectorAll('li');
             recipe.ingredients = Array.from(items).map(li => li.textContent.trim()).join('\n');
         }
 
-        // Try to find instructions
         const instructionsList = doc.querySelector('.instructions') ||
-                                doc.querySelector('[class*="instruction"]') ||
-                                doc.querySelector('.recipe-instructions') ||
-                                doc.querySelector('.directions');
+                                doc.querySelector('[class*="instruction"]');
         if (instructionsList) {
             const items = instructionsList.querySelectorAll('li, p');
             recipe.instructions = Array.from(items).map((el, i) =>
@@ -480,81 +408,53 @@
     }
 
     function findBestImage(doc) {
-        // Try Open Graph image first (usually the best)
         const ogImage = doc.querySelector('meta[property="og:image"]')?.content;
         if (ogImage) return ogImage;
 
-        // Try Twitter card image
         const twitterImage = doc.querySelector('meta[name="twitter:image"]')?.content;
         if (twitterImage) return twitterImage;
 
-        // Try recipe-specific selectors
         const recipeSelectors = [
-            '.recipe-image img',
-            '.recipe-photo img',
-            '[class*="recipe-image"] img',
-            '[class*="recipe-photo"] img',
-            '[class*="hero"] img',
-            '.hero-image img',
-            'article img',
-            '.post-content img',
-            'main img',
-            '.entry-content img'
+            '.recipe-image img', '.recipe-photo img', '[class*="hero"] img',
+            'article img', '.post-content img', 'main img'
         ];
 
         for (const selector of recipeSelectors) {
             const img = doc.querySelector(selector);
-            const src = img?.src || img?.getAttribute('data-src') || img?.getAttribute('data-lazy-src');
-            if (src && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar')) {
+            const src = img?.src || img?.getAttribute('data-src');
+            if (src && !src.includes('icon') && !src.includes('logo')) {
                 return src;
             }
         }
 
-        // Last resort: find the largest image
-        const allImages = doc.querySelectorAll('img');
-        let bestImg = null;
-        let bestSize = 0;
-        allImages.forEach(img => {
-            const src = img.src || img.getAttribute('data-src');
-            if (!src || src.includes('icon') || src.includes('logo') || src.includes('avatar')) return;
-            const width = parseInt(img.getAttribute('width')) || img.naturalWidth || 0;
-            const height = parseInt(img.getAttribute('height')) || img.naturalHeight || 0;
-            const size = width * height;
-            if (size > bestSize || (!bestImg && src)) {
-                bestSize = size;
-                bestImg = src;
-            }
-        });
-
-        return bestImg || '';
+        return '';
     }
 
     // ============================================
     // UI Components
     // ============================================
 
-    // DOM Elements
     const elements = {
         recipeGrid: document.getElementById('recipe-grid'),
         emptyState: document.getElementById('empty-state'),
         noResults: document.getElementById('no-results'),
         // Sidebar elements
-        sidebarSearch: document.getElementById('sidebar-search'),
         sidebarTags: document.getElementById('sidebar-tags'),
         sidebarFolders: document.getElementById('sidebar-folders'),
         countAll: document.getElementById('count-all'),
         contentTitle: document.getElementById('content-title'),
         recipeCount: document.getElementById('recipe-count'),
         btnAddFolder: document.getElementById('btn-add-folder'),
-        btnSeeAllCategories: document.getElementById('btn-see-all-categories'),
-        foldersSection: document.getElementById('folders-section'),
-        categoriesSection: document.getElementById('categories-section'),
-        // Sidebar toggle (mobile)
+        // Sidebar toggle
         sidebar: document.getElementById('sidebar'),
         sidebarOverlay: document.getElementById('sidebar-overlay'),
         btnSidebarToggle: document.getElementById('btn-sidebar-toggle'),
         // Header elements
+        headerSearch: document.getElementById('header-search'),
         btnAddRecipe: document.getElementById('btn-add-recipe'),
+        addRecipeDropdown: document.getElementById('add-recipe-dropdown'),
+        btnAddFromUrl: document.getElementById('btn-add-from-url'),
+        btnAddManual: document.getElementById('btn-add-manual'),
         btnAddFirst: document.getElementById('btn-add-first'),
         btnMenu: document.getElementById('btn-menu'),
         dropdownMenu: document.getElementById('dropdown-menu'),
@@ -572,12 +472,7 @@
         // Photo import elements
         photoImportArea: document.getElementById('photo-import-area'),
         photoPreviewContainer: document.getElementById('photo-preview-container'),
-        photoPreview: document.getElementById('photo-preview'),
-        btnRemovePhoto: document.getElementById('btn-remove-photo'),
         btnProcessPhoto: document.getElementById('btn-process-photo'),
-        ocrProgress: document.getElementById('ocr-progress'),
-        ocrProgressFill: document.getElementById('ocr-progress-fill'),
-        ocrStatus: document.getElementById('ocr-status'),
         photoFile: document.getElementById('photo-file'),
         // Form elements
         recipeForm: document.getElementById('recipe-form'),
@@ -587,11 +482,27 @@
         imagePreview: document.getElementById('image-preview'),
         btnUploadImage: document.getElementById('btn-upload-image'),
         recipeImageFile: document.getElementById('recipe-image-file'),
+        urlImportSection: document.getElementById('url-import-section'),
+        urlDivider: document.getElementById('url-divider'),
+        recipePhotosSection: document.getElementById('recipe-photos-section'),
+        recipePhotosPreview: document.getElementById('recipe-photos-preview'),
+        ingredientsOptional: document.getElementById('ingredients-optional'),
+        instructionsOptional: document.getElementById('instructions-optional'),
         // View folder menu
         btnAddToFolder: document.getElementById('btn-add-to-folder'),
         viewFolderDropdown: document.getElementById('view-folder-dropdown'),
         viewFolderList: document.getElementById('view-folder-list'),
         btnViewNewFolder: document.getElementById('btn-view-new-folder'),
+        // View recipe photos
+        viewPhotosSection: document.getElementById('view-photos-section'),
+        viewPhotosGallery: document.getElementById('view-photos-gallery'),
+        viewIngredientsSection: document.getElementById('view-ingredients-section'),
+        viewInstructionsSection: document.getElementById('view-instructions-section'),
+        // Lightbox
+        photoLightbox: document.getElementById('photo-lightbox'),
+        lightboxImage: document.getElementById('lightbox-image'),
+        lightboxPrev: document.getElementById('lightbox-prev'),
+        lightboxNext: document.getElementById('lightbox-next'),
         // Other
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toast-message'),
@@ -610,6 +521,9 @@
     let currentSearch = '';
     let currentViewingRecipe = null;
     let deferredInstallPrompt = null;
+    let isCookbookMode = false;
+    let currentPhotoIndex = 0;
+    let currentPhotosArray = [];
 
     // ============================================
     // Rendering Functions
@@ -619,23 +533,18 @@
         const recipes = getRecipes();
         let filtered = recipes;
 
-        // Sort by recently added first (default behavior)
         filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-        // Apply sidebar filter (all, recent, favorites, folder, or tag)
         if (currentFilter === 'recent') {
-            // Show recipes from last 7 days
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
             filtered = filtered.filter(r => new Date(r.createdAt) >= oneWeekAgo);
         } else if (currentFilter === 'favorites') {
             filtered = filtered.filter(r => r.favorite);
         } else if (currentFilter.startsWith('folder:')) {
-            // Folder filter
             const folderId = currentFilter.replace('folder:', '');
             filtered = filtered.filter(r => r.folders && r.folders.includes(folderId));
         } else if (currentFilter !== 'all') {
-            // Tag filter
             filtered = filtered.filter(r =>
                 r.tags && r.tags.some(t =>
                     t.toLowerCase() === currentFilter.toLowerCase()
@@ -643,7 +552,6 @@
             );
         }
 
-        // Apply search
         if (currentSearch) {
             const search = currentSearch.toLowerCase();
             filtered = filtered.filter(r =>
@@ -654,10 +562,8 @@
             );
         }
 
-        // Update recipe count in sidebar
         elements.countAll.textContent = recipes.length;
 
-        // Update content title and count
         let titleText = 'All Recipes';
         if (currentFilter === 'recent') {
             titleText = 'Recently Added';
@@ -673,7 +579,6 @@
         elements.contentTitle.textContent = titleText;
         elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
-        // Update UI
         elements.recipeGrid.innerHTML = '';
         elements.emptyState.hidden = true;
         elements.noResults.hidden = true;
@@ -698,13 +603,11 @@
         card.className = 'recipe-card';
         card.dataset.id = recipe.id;
 
-        // Get source name from URL
         let sourceName = '';
         if (recipe.source) {
             sourceName = getSourceName(recipe.source);
         }
 
-        // Build folder options for dropdown
         const folders = getFolders();
         const recipeFolders = recipe.folders || [];
         const folderOptions = folders.map(f => {
@@ -719,7 +622,6 @@
             </button>
         `}).join('');
 
-        // Image section with overlay buttons
         const isFavorite = recipe.favorite ? 'active' : '';
         const overlayButtons = `
             <div class="card-overlay-buttons">
@@ -793,7 +695,6 @@
                 </div>`;
         }
 
-        // Meta info
         const metaParts = [];
         if (recipe.prepTime || recipe.cookTime) {
             const time = [recipe.prepTime, recipe.cookTime].filter(Boolean).join(' + ');
@@ -803,7 +704,6 @@
             metaParts.push(`<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>${escapeHtml(recipe.servings)}</span>`);
         }
 
-        // Tags with "more" button
         const tags = recipe.tags || [];
         const maxVisibleTags = 2;
         const visibleTags = tags.slice(0, maxVisibleTags);
@@ -825,10 +725,9 @@
             </div>
         `;
 
-        // Handle card clicks
         card.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
-            const recipeId = recipe.id; // Store ID for closure
+            const recipeId = recipe.id;
 
             if (btn) {
                 e.stopPropagation();
@@ -845,7 +744,10 @@
                 } else if (action === 'delete') {
                     closeAllCardMenus();
                     if (confirm('Are you sure you want to delete this recipe?')) {
-                        deleteRecipe(recipeId);
+                        deleteRecipeById(recipeId);
+                        renderRecipes();
+                        renderTagsFilter();
+                        showToast('Recipe deleted');
                     }
                 } else if (action === 'toggle-folder') {
                     closeAllCardMenus();
@@ -877,7 +779,6 @@
                         }
                     }
                 } else if (action === 'show-more-tags') {
-                    // Show all tags - get fresh recipe data
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
                     const tagsContainer = btn.closest('.recipe-card-tags');
@@ -895,9 +796,7 @@
     function toggleCardMenu(card) {
         const dropdown = card.querySelector('.card-dropdown');
         const wasOpen = !dropdown.hidden;
-
         closeAllCardMenus();
-
         if (!wasOpen) {
             dropdown.hidden = false;
             openCardMenu = dropdown;
@@ -909,22 +808,13 @@
         openCardMenu = null;
     }
 
-    function deleteRecipe(id) {
-        const recipes = getRecipes();
-        const index = recipes.findIndex(r => r.id === id);
-        if (index !== -1) {
-            recipes.splice(index, 1);
-            saveRecipes(recipes);
-            renderRecipes();
-            renderTagsFilter();
-            showToast('Recipe deleted');
-        }
-    }
-
     function getSourceName(url) {
         try {
+            // Check if it's a URL
+            if (!url.startsWith('http')) {
+                return url; // Return as-is if not a URL (e.g., "NYT Cooking")
+            }
             const hostname = new URL(url).hostname.replace('www.', '');
-            // Map common domains to friendly names
             const siteNames = {
                 'cooking.nytimes.com': 'NYT Cooking',
                 'nytimes.com': 'New York Times',
@@ -934,7 +824,6 @@
                 'epicurious.com': 'Epicurious',
                 'foodnetwork.com': 'Food Network',
                 'food52.com': 'Food52',
-                'tasteofsouthindia.com': 'Taste of South India',
                 'simplyrecipes.com': 'Simply Recipes',
                 'budgetbytes.com': 'Budget Bytes',
                 'minimalistbaker.com': 'Minimalist Baker',
@@ -943,15 +832,11 @@
                 'thekitchn.com': 'The Kitchn',
                 'delish.com': 'Delish',
                 'tasty.co': 'Tasty',
-                'eatingwell.com': 'EatingWell',
-                'cookieandkate.com': 'Cookie and Kate',
-                'loveandlemons.com': 'Love and Lemons',
-                'indianhealthyrecipes.com': 'Indian Healthy Recipes',
-                'hebbarskitchen.com': 'Hebbars Kitchen'
+                'eatingwell.com': 'EatingWell'
             };
             return siteNames[hostname] || hostname.split('.')[0].charAt(0).toUpperCase() + hostname.split('.')[0].slice(1);
         } catch {
-            return '';
+            return url;
         }
     }
 
@@ -969,8 +854,7 @@
 
     function renderTagsFilter() {
         const tags = getAllTags();
-        // Show only first 5 tags by default
-        const displayTags = tags.slice(0, 5);
+        const displayTags = tags.slice(0, 8);
         elements.sidebarTags.innerHTML = displayTags.map(tag => `
             <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -980,8 +864,6 @@
                 ${escapeHtml(tag)}
             </button>
         `).join('');
-
-        // Update active state on all sidebar items
         updateSidebarActiveState();
     }
 
@@ -992,7 +874,6 @@
         if (!elements.sidebarFolders) return;
 
         elements.sidebarFolders.innerHTML = folders.map(folder => {
-            // Count recipes in this folder
             const count = recipes.filter(r => r.folders && r.folders.includes(folder.id)).length;
             const isActive = currentFilter === `folder:${folder.id}`;
             return `
@@ -1015,7 +896,6 @@
     }
 
     function deleteFolder(folderId) {
-        // Remove folder from all recipes first
         const recipes = getRecipes();
         recipes.forEach(recipe => {
             if (recipe.folders && recipe.folders.includes(folderId)) {
@@ -1024,11 +904,9 @@
         });
         saveRecipes(recipes);
 
-        // Delete the folder
         const folders = getFolders().filter(f => f.id !== folderId);
         saveFolders(folders);
 
-        // If we're viewing this folder, switch to all
         if (currentFilter === `folder:${folderId}`) {
             handleSidebarFilter('all');
         }
@@ -1049,7 +927,6 @@
                 <button class="view-folder-item ${isInFolder ? 'in-folder' : ''}" data-folder-id="${folder.id}">
                     <svg viewBox="0 0 24 24" fill="${isInFolder ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                        ${isInFolder ? '<polyline points="9 11 12 14 22 4" stroke="white" stroke-width="2"></polyline>' : ''}
                     </svg>
                     ${escapeHtml(folder.name)}
                 </button>
@@ -1062,32 +939,49 @@
     }
 
     function updateSidebarActiveState() {
-        // Update all sidebar items
         document.querySelectorAll('.sidebar-item[data-filter]').forEach(item => {
             const filter = item.dataset.filter;
             item.classList.toggle('active', filter === currentFilter);
         });
     }
 
-    function toggleSidebarSection(sectionId) {
-        const section = document.getElementById(sectionId);
-        if (section) {
-            section.classList.toggle('collapsed');
-        }
-    }
-
     // ============================================
     // Modal Functions
     // ============================================
 
-    function openAddModal() {
+    function openAddModal(showUrl = true) {
         elements.modalTitle.textContent = 'Add Recipe';
         elements.recipeForm.reset();
         document.getElementById('recipe-id').value = '';
+        document.getElementById('recipe-photos').value = '[]';
         elements.imagePreview.hidden = true;
-        elements.recipeUrl.value = '';
+
+        // Reset cookbook mode
+        isCookbookMode = false;
+        elements.recipePhotosSection.hidden = true;
+        elements.recipePhotosPreview.innerHTML = '';
+        elements.ingredientsOptional.hidden = true;
+        elements.instructionsOptional.hidden = true;
+
+        // Remove required from ingredients/instructions
+        document.getElementById('recipe-ingredients').removeAttribute('required');
+        document.getElementById('recipe-instructions').removeAttribute('required');
+
+        // Show/hide URL section
+        if (showUrl) {
+            elements.urlImportSection.hidden = false;
+            elements.urlDivider.hidden = false;
+        } else {
+            elements.urlImportSection.hidden = true;
+            elements.urlDivider.hidden = true;
+        }
+
         openModal(elements.modalRecipe);
-        elements.recipeUrl.focus();
+        if (showUrl) {
+            elements.recipeUrl.focus();
+        } else {
+            document.getElementById('recipe-title').focus();
+        }
     }
 
     function openEditModal(id) {
@@ -1106,6 +1000,7 @@
         document.getElementById('recipe-instructions').value = recipe.instructions || '';
         document.getElementById('recipe-notes').value = recipe.notes || '';
         document.getElementById('recipe-source').value = recipe.source || '';
+        document.getElementById('recipe-photos').value = JSON.stringify(recipe.photos || []);
 
         if (recipe.image) {
             elements.imagePreview.style.backgroundImage = `url(${recipe.image})`;
@@ -1113,6 +1008,31 @@
         } else {
             elements.imagePreview.hidden = true;
         }
+
+        // Hide URL section for editing
+        elements.urlImportSection.hidden = true;
+        elements.urlDivider.hidden = true;
+
+        // Show recipe photos if available
+        const photos = recipe.photos || [];
+        if (photos.length > 0) {
+            isCookbookMode = true;
+            elements.recipePhotosSection.hidden = false;
+            elements.recipePhotosPreview.innerHTML = photos.map(p =>
+                `<img src="${p}" alt="Recipe photo">`
+            ).join('');
+            elements.ingredientsOptional.hidden = false;
+            elements.instructionsOptional.hidden = false;
+        } else {
+            isCookbookMode = false;
+            elements.recipePhotosSection.hidden = true;
+            elements.ingredientsOptional.hidden = true;
+            elements.instructionsOptional.hidden = true;
+        }
+
+        // Remove required from ingredients/instructions
+        document.getElementById('recipe-ingredients').removeAttribute('required');
+        document.getElementById('recipe-instructions').removeAttribute('required');
 
         openModal(elements.modalRecipe);
     }
@@ -1125,7 +1045,6 @@
 
         document.getElementById('view-title').textContent = recipe.title;
 
-        // Image
         const viewImage = document.getElementById('view-image');
         if (recipe.image) {
             viewImage.style.backgroundImage = `url(${recipe.image})`;
@@ -1134,28 +1053,46 @@
             viewImage.hidden = true;
         }
 
-        // Meta
+        // Show recipe photos if available
+        const photos = recipe.photos || [];
+        if (photos.length > 0) {
+            elements.viewPhotosSection.hidden = false;
+            elements.viewPhotosGallery.innerHTML = photos.map((p, i) =>
+                `<div class="view-photo-item" data-index="${i}"><img src="${p}" alt="Recipe photo ${i + 1}"></div>`
+            ).join('');
+        } else {
+            elements.viewPhotosSection.hidden = true;
+        }
+
         const metaParts = [];
         if (recipe.servings) metaParts.push(`<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>Serves ${escapeHtml(recipe.servings)}</span>`);
         if (recipe.prepTime) metaParts.push(`<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Prep: ${escapeHtml(recipe.prepTime)}</span>`);
         if (recipe.cookTime) metaParts.push(`<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>Cook: ${escapeHtml(recipe.cookTime)}</span>`);
         document.getElementById('view-meta').innerHTML = metaParts.join('');
 
-        // Tags
         document.getElementById('view-tags').innerHTML = (recipe.tags || []).map(tag =>
             `<span class="view-tag">${escapeHtml(tag)}</span>`
         ).join('');
 
         // Ingredients
         const ingredients = (recipe.ingredients || '').split('\n').filter(Boolean);
-        document.getElementById('view-ingredients').innerHTML = ingredients.map(ing =>
-            `<li>${escapeHtml(ing)}</li>`
-        ).join('');
+        if (ingredients.length > 0) {
+            elements.viewIngredientsSection.hidden = false;
+            document.getElementById('view-ingredients').innerHTML = ingredients.map(ing =>
+                `<li>${escapeHtml(ing)}</li>`
+            ).join('');
+        } else {
+            elements.viewIngredientsSection.hidden = true;
+        }
 
         // Instructions
-        document.getElementById('view-instructions').textContent = recipe.instructions || '';
+        if (recipe.instructions) {
+            elements.viewInstructionsSection.hidden = false;
+            document.getElementById('view-instructions').textContent = recipe.instructions;
+        } else {
+            elements.viewInstructionsSection.hidden = true;
+        }
 
-        // Notes
         const notesSection = document.getElementById('view-notes-section');
         if (recipe.notes) {
             document.getElementById('view-notes').textContent = recipe.notes;
@@ -1164,9 +1101,8 @@
             notesSection.hidden = true;
         }
 
-        // Source
         const sourceSection = document.getElementById('view-source-section');
-        if (recipe.source) {
+        if (recipe.source && recipe.source.startsWith('http')) {
             document.getElementById('view-source').href = recipe.source;
             sourceSection.hidden = false;
         } else {
@@ -1177,7 +1113,6 @@
     }
 
     function setupBookmarklet() {
-        // Create bookmarklet with embedded favicon for a nice icon in bookmark bar
         const appUrl = window.location.href.split('?')[0].split('#')[0];
         const bookmarkletCode = `javascript:(function(){window.open('${appUrl}?url='+encodeURIComponent(window.location.href),'_blank')})()`;
         elements.bookmarkletDrag.href = bookmarkletCode;
@@ -1187,7 +1122,6 @@
         modal.hidden = false;
         document.body.style.overflow = 'hidden';
 
-        // Focus trap
         const focusable = modal.querySelectorAll('button, input, textarea, select, a[href]');
         if (focusable.length) {
             focusable[0].focus();
@@ -1195,17 +1129,19 @@
     }
 
     function closeModal(modal) {
-        modal.hidden = true;
+        if (modal) {
+            modal.hidden = true;
+        }
         document.body.style.overflow = '';
         currentViewingRecipe = null;
     }
 
     function closeAllModals() {
-        closeModal(elements.modalRecipe);
-        closeModal(elements.modalView);
-        closeModal(elements.modalBulkImport);
-        closeModal(elements.modalFailedUrls);
-        closeModal(elements.modalPhotoImport);
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.hidden = true;
+        });
+        document.body.style.overflow = '';
+        currentViewingRecipe = null;
     }
 
     // ============================================
@@ -1216,6 +1152,8 @@
         e.preventDefault();
 
         const id = document.getElementById('recipe-id').value;
+        const photos = JSON.parse(document.getElementById('recipe-photos').value || '[]');
+
         const recipe = {
             title: normalizeTitle(document.getElementById('recipe-title').value),
             image: document.getElementById('recipe-image').value.trim(),
@@ -1229,27 +1167,14 @@
             ingredients: document.getElementById('recipe-ingredients').value.trim(),
             instructions: document.getElementById('recipe-instructions').value.trim(),
             notes: document.getElementById('recipe-notes').value.trim(),
-            source: document.getElementById('recipe-source').value.trim()
+            source: document.getElementById('recipe-source').value.trim(),
+            photos: photos
         };
 
         if (id) {
-            // Check for duplicates when updating (exclude current recipe)
-            const duplicate = findDuplicate(recipe.title, recipe.source, id);
-            if (duplicate) {
-                if (!confirm(`A recipe with a similar title or source already exists: "${duplicate.title}". Continue updating anyway?`)) {
-                    return;
-                }
-            }
             updateRecipe(id, recipe);
             showToast('Recipe updated!');
         } else {
-            // Check for duplicates when adding new
-            const duplicate = findDuplicate(recipe.title, recipe.source);
-            if (duplicate) {
-                if (!confirm(`A recipe with a similar title or source already exists: "${duplicate.title}". Add anyway?`)) {
-                    return;
-                }
-            }
             addRecipe(recipe);
             showToast('Recipe saved!');
         }
@@ -1273,7 +1198,6 @@
         try {
             const recipe = await fetchRecipeFromUrl(url);
 
-            // Populate form
             document.getElementById('recipe-title').value = normalizeTitle(recipe.title) || '';
             document.getElementById('recipe-image').value = recipe.image || '';
             document.getElementById('recipe-servings').value = recipe.servings || '';
@@ -1284,7 +1208,6 @@
             document.getElementById('recipe-instructions').value = recipe.instructions || '';
             document.getElementById('recipe-source').value = recipe.source || url;
 
-            // Show image preview
             if (recipe.image) {
                 elements.imagePreview.style.backgroundImage = `url(${recipe.image})`;
                 elements.imagePreview.hidden = false;
@@ -1348,13 +1271,10 @@
             let recipes = [];
 
             if (fileName.endsWith('.paprikarecipes')) {
-                // Paprika format - gzip containing recipe JSON files
                 recipes = await importPaprikaFile(file);
             } else if (fileName.endsWith('.html') || fileName.endsWith('.htm')) {
-                // Paprika HTML export or other HTML
                 recipes = await importHtmlFile(file);
             } else {
-                // Assume JSON (Ivy's Recipes format)
                 recipes = await importJsonFile(file);
             }
 
@@ -1368,7 +1288,6 @@
 
             let added = 0;
             recipes.forEach(recipe => {
-                // Skip duplicates by title
                 if (!existingTitles.has(recipe.title.toLowerCase())) {
                     recipe.id = generateId();
                     recipe.createdAt = new Date().toISOString();
@@ -1388,7 +1307,6 @@
             console.error('Import error:', error);
         }
 
-        // Reset input
         e.target.value = '';
     }
 
@@ -1409,13 +1327,10 @@
     }
 
     async function importPaprikaFile(file) {
-        // Paprika files are zip archives containing gzip-compressed JSON recipe files
         if (!window.JSZip) {
-            // Load JSZip dynamically if not available
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
         }
         if (!window.pako) {
-            // Load pako for gzip decompression
             await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js');
         }
 
@@ -1430,13 +1345,11 @@
                 filePromises.push(
                     zipEntry.async('uint8array').then(data => {
                         try {
-                            // Try to decompress with gzip first (Paprika files are gzip-compressed inside)
                             let content;
                             try {
                                 const decompressed = window.pako.inflate(data);
                                 content = new TextDecoder().decode(decompressed);
                             } catch {
-                                // If decompression fails, try as plain text
                                 content = new TextDecoder().decode(data);
                             }
                             const paprikaRecipe = JSON.parse(content);
@@ -1454,7 +1367,6 @@
     }
 
     function convertPaprikaRecipe(p) {
-        // Handle categories - could be string, array, or comma-separated
         let tags = [];
         if (p.categories) {
             if (Array.isArray(p.categories)) {
@@ -1463,7 +1375,6 @@
                 tags = String(p.categories).split(/[,;]/).map(t => t.trim());
             }
         }
-        // Properly capitalize tags
         tags = tags.filter(Boolean).map(t =>
             t.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
         );
@@ -1490,18 +1401,16 @@
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(event.target.result, 'text/html');
 
-                    // Try to find Paprika-style recipe blocks
                     const recipes = [];
                     const recipeBlocks = doc.querySelectorAll('.recipe, [class*="recipe"]');
 
                     if (recipeBlocks.length > 0) {
                         recipeBlocks.forEach(block => {
-                            const recipe = extractRecipeFromHtml(block);
+                            const recipe = extractRecipeFromHtmlElement(block);
                             if (recipe.title) recipes.push(recipe);
                         });
                     } else {
-                        // Try to extract single recipe from the whole document
-                        const recipe = extractRecipeFromHtml(doc.body);
+                        const recipe = extractRecipeFromHtmlElement(doc.body);
                         if (recipe.title) recipes.push(recipe);
                     }
 
@@ -1515,7 +1424,7 @@
         });
     }
 
-    function extractRecipeFromHtml(element) {
+    function extractRecipeFromHtmlElement(element) {
         const getText = (selectors) => {
             for (const sel of selectors) {
                 const el = element.querySelector(sel);
@@ -1525,13 +1434,13 @@
         };
 
         return {
-            title: getText(['h1', 'h2', '.title', '.recipe-title', '[class*="title"]']),
+            title: getText(['h1', 'h2', '.title', '.recipe-title']),
             ingredients: getText(['.ingredients', '[class*="ingredient"]']),
-            instructions: getText(['.directions', '.instructions', '[class*="direction"]', '[class*="instruction"]']),
+            instructions: getText(['.directions', '.instructions']),
             notes: getText(['.notes', '[class*="note"]']),
             prepTime: getText(['.prep-time', '[class*="prep"]']),
             cookTime: getText(['.cook-time', '[class*="cook"]']),
-            servings: getText(['.servings', '.yield', '[class*="serving"]', '[class*="yield"]']),
+            servings: getText(['.servings', '.yield']),
             source: '',
             image: '',
             tags: []
@@ -1558,7 +1467,6 @@
             return;
         }
 
-        // Show loading state
         const loadingEl = document.createElement('div');
         loadingEl.id = 'bulk-import-loading';
         loadingEl.innerHTML = `
@@ -1587,7 +1495,6 @@
             const url = urls[i];
             progressEl.textContent = `${i + 1} / ${urls.length}`;
 
-            // Show which site we're fetching
             let hostname = 'unknown';
             try {
                 hostname = new URL(url).hostname.replace('www.', '');
@@ -1607,8 +1514,6 @@
                     successCount++;
                     successEl.textContent = `${successCount} added`;
                     statusEl.textContent = `Added: ${recipe.title.substring(0, 30)}${recipe.title.length > 30 ? '...' : ''}`;
-
-                    // Save after each successful add so we don't lose progress
                     saveRecipes(existing);
                 } else if (recipe.title) {
                     skippedCount++;
@@ -1620,32 +1525,27 @@
             } catch (e) {
                 console.warn('Failed to fetch:', url, e.message);
                 failedUrls.push({ url, reason: e.message });
-                statusEl.textContent = `Failed: ${hostname} - ${e.message.substring(0, 20)}`;
+                statusEl.textContent = `Failed: ${hostname}`;
             }
 
-            // Small delay between requests
             await new Promise(r => setTimeout(r, 300));
         }
 
-        // Show completion status before removing overlay
         statusEl.textContent = 'Import complete!';
         progressEl.textContent = `Done`;
         await new Promise(r => setTimeout(r, 1000));
 
-        // Remove loading overlay
         loadingEl.remove();
 
-        // Update UI
         renderRecipes();
         renderTagsFilter();
 
-        // Show detailed result
         let message = '';
         if (successCount > 0) {
             message = `Imported ${successCount} recipe${successCount !== 1 ? 's' : ''}`;
         }
         if (skippedCount > 0) {
-            message += message ? `, ${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped` : `${skippedCount} duplicate${skippedCount !== 1 ? 's' : ''} skipped`;
+            message += message ? `, ${skippedCount} skipped` : `${skippedCount} skipped`;
         }
         if (failedUrls.length > 0) {
             message += message ? `, ${failedUrls.length} failed` : `${failedUrls.length} failed`;
@@ -1655,7 +1555,6 @@
         }
         showToast(message);
 
-        // Show failed URLs in modal
         if (failedUrls.length > 0) {
             showFailedUrlsModal(failedUrls);
         }
@@ -1680,10 +1579,9 @@
         openModal(elements.modalFailedUrls);
     }
 
-    // Global function to add recipe manually from failed URL
     window.addManualRecipeFromUrl = function(url) {
         closeModal(elements.modalFailedUrls);
-        openAddModal();
+        openAddModal(true);
         elements.recipeUrl.value = url;
     };
 
@@ -1700,7 +1598,6 @@
 
     function capitalizeTag(tag) {
         if (!tag) return '';
-        // Handle multi-word tags (e.g., "instant pot" -> "Instant Pot")
         return tag.split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join(' ');
@@ -1708,20 +1605,16 @@
 
     function normalizeTitle(title) {
         if (!title) return '';
-        // Title case conversion, keeping small words lowercase unless first/last
         const smallWords = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'with'];
         const words = title.trim().split(/\s+/);
         return words.map((word, i) => {
             const lower = word.toLowerCase();
-            // Always capitalize first and last word
             if (i === 0 || i === words.length - 1) {
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             }
-            // Keep small words lowercase
             if (smallWords.includes(lower)) {
                 return lower;
             }
-            // Capitalize other words
             return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         }).join(' ');
     }
@@ -1743,11 +1636,8 @@
         const params = new URLSearchParams(window.location.search);
         let url = params.get('url');
         const text = params.get('text');
-        const title = params.get('title');
 
-        // Some apps share the URL in the 'text' field
         if (!url && text) {
-            // Try to extract URL from text
             const urlMatch = text.match(/https?:\/\/[^\s]+/);
             if (urlMatch) {
                 url = urlMatch[0];
@@ -1755,11 +1645,8 @@
         }
 
         if (url) {
-            // Clear the URL parameters
             window.history.replaceState({}, '', window.location.pathname);
-
-            // Open add modal with URL
-            openAddModal();
+            openAddModal(true);
             elements.recipeUrl.value = url;
             handleFetchUrl();
         }
@@ -1792,7 +1679,7 @@
     // Cookbook Photo Import
     // ============================================
 
-    let selectedPhotos = []; // Array of {file, dataUrl}
+    let selectedPhotos = [];
 
     function openPhotoImportModal() {
         resetPhotoImport();
@@ -1819,12 +1706,10 @@
             return;
         }
 
-        // Show preview container with all photos
         previewContainer.hidden = false;
         elements.photoImportArea.hidden = true;
         if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = false;
 
-        // Create preview HTML
         const previewHtml = `
             <div class="photo-preview-grid">
                 ${selectedPhotos.map((photo, i) => `
@@ -1844,16 +1729,15 @@
         `;
         previewContainer.innerHTML = previewHtml;
 
-        // Add event listeners for remove buttons
         previewContainer.querySelectorAll('.photo-remove-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const index = parseInt(btn.dataset.index);
                 selectedPhotos.splice(index, 1);
                 updatePhotoPreviewDisplay();
             });
         });
 
-        // Add event listener for "Add More Photos" button
         const addMoreBtn = previewContainer.querySelector('#btn-add-more-photos');
         if (addMoreBtn) {
             addMoreBtn.addEventListener('click', () => {
@@ -1885,74 +1769,162 @@
     function processCookbookPhoto() {
         if (selectedPhotos.length === 0) return;
 
-        // Close photo modal and open recipe form
         closeModal(elements.modalPhotoImport);
-        openAddModal();
 
-        // Use the first photo as the main image
-        const mainPhotoUrl = selectedPhotos[0].dataUrl;
-        document.getElementById('recipe-image').value = mainPhotoUrl;
-        elements.imagePreview.style.backgroundImage = `url(${mainPhotoUrl})`;
+        // Open add modal in cookbook mode
+        isCookbookMode = true;
+        openAddModal(false);
+
+        // Set up the form for cookbook mode
+        const photoUrls = selectedPhotos.map(p => p.dataUrl);
+
+        // Use first photo as cover image
+        document.getElementById('recipe-image').value = photoUrls[0];
+        elements.imagePreview.style.backgroundImage = `url(${photoUrls[0]})`;
         elements.imagePreview.hidden = false;
 
-        // Add "Cookbook" as a default tag
+        // Store all photos
+        document.getElementById('recipe-photos').value = JSON.stringify(photoUrls);
+
+        // Show recipe photos preview
+        elements.recipePhotosSection.hidden = false;
+        elements.recipePhotosPreview.innerHTML = photoUrls.map(p =>
+            `<img src="${p}" alt="Recipe photo">`
+        ).join('');
+
+        // Mark ingredients/instructions as optional
+        elements.ingredientsOptional.hidden = false;
+        elements.instructionsOptional.hidden = false;
+
+        // Add "Cookbook" tag
         document.getElementById('recipe-tags').value = 'Cookbook';
 
-        // If multiple photos, add note about additional photos
-        if (selectedPhotos.length > 1) {
-            document.getElementById('recipe-notes').value = `Additional recipe photos: ${selectedPhotos.length} images uploaded`;
-            showToast(`${selectedPhotos.length} photos added! Fill in the recipe details.`);
-        } else {
-            showToast('Photo added! Fill in the recipe details.');
+        showToast(`${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} added! Fill in the recipe details.`);
+    }
+
+    // ============================================
+    // Photo Lightbox
+    // ============================================
+
+    function openLightbox(photos, startIndex = 0) {
+        currentPhotosArray = photos;
+        currentPhotoIndex = startIndex;
+        updateLightboxImage();
+        elements.photoLightbox.hidden = false;
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        elements.photoLightbox.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    function updateLightboxImage() {
+        if (currentPhotosArray.length > 0) {
+            elements.lightboxImage.src = currentPhotosArray[currentPhotoIndex];
+            elements.lightboxPrev.style.display = currentPhotoIndex > 0 ? 'block' : 'none';
+            elements.lightboxNext.style.display = currentPhotoIndex < currentPhotosArray.length - 1 ? 'block' : 'none';
         }
     }
 
+    function lightboxPrev() {
+        if (currentPhotoIndex > 0) {
+            currentPhotoIndex--;
+            updateLightboxImage();
+        }
+    }
+
+    function lightboxNext() {
+        if (currentPhotoIndex < currentPhotosArray.length - 1) {
+            currentPhotoIndex++;
+            updateLightboxImage();
+        }
+    }
+
+    // ============================================
+    // Sidebar Toggle
+    // ============================================
+
+    function toggleSidebar() {
+        const isHidden = elements.sidebar.classList.toggle('hidden');
+        elements.btnSidebarToggle.classList.toggle('sidebar-hidden', isHidden);
+
+        // On mobile, use open class instead
+        if (window.innerWidth <= 1024) {
+            elements.sidebar.classList.toggle('open', !isHidden);
+            elements.sidebarOverlay.classList.toggle('visible', !isHidden);
+        }
+    }
 
     // ============================================
     // Event Listeners
     // ============================================
 
     function setupEventListeners() {
-        // Add recipe buttons
-        elements.btnAddRecipe.addEventListener('click', openAddModal);
-        elements.btnAddFirst.addEventListener('click', openAddModal);
+        // Add recipe dropdown
+        elements.btnAddRecipe.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const container = elements.btnAddRecipe.parentElement;
+            container.classList.toggle('open');
+            elements.addRecipeDropdown.hidden = !elements.addRecipeDropdown.hidden;
+            elements.dropdownMenu.hidden = true;
+        });
+
+        elements.btnAddFromUrl.addEventListener('click', () => {
+            elements.addRecipeDropdown.hidden = true;
+            elements.btnAddRecipe.parentElement.classList.remove('open');
+            openAddModal(true);
+        });
+
+        elements.btnAddManual.addEventListener('click', () => {
+            elements.addRecipeDropdown.hidden = true;
+            elements.btnAddRecipe.parentElement.classList.remove('open');
+            openAddModal(false);
+        });
+
+        elements.btnAddFirst.addEventListener('click', () => openAddModal(true));
 
         // Menu dropdown
         elements.btnMenu.addEventListener('click', (e) => {
             e.stopPropagation();
             elements.dropdownMenu.hidden = !elements.dropdownMenu.hidden;
+            elements.addRecipeDropdown.hidden = true;
+            elements.btnAddRecipe.parentElement.classList.remove('open');
         });
 
-        // Close dropdown when clicking elsewhere
+        // Close dropdowns when clicking elsewhere
         document.addEventListener('click', (e) => {
+            if (!elements.addRecipeDropdown.contains(e.target) && e.target !== elements.btnAddRecipe) {
+                elements.addRecipeDropdown.hidden = true;
+                elements.btnAddRecipe.parentElement.classList.remove('open');
+            }
             if (!elements.dropdownMenu.contains(e.target) && e.target !== elements.btnMenu) {
                 elements.dropdownMenu.hidden = true;
             }
         });
 
-        // Sidebar toggle (mobile)
+        // Sidebar toggle
         if (elements.btnSidebarToggle) {
-            elements.btnSidebarToggle.addEventListener('click', () => {
-                const isOpen = elements.sidebar.classList.toggle('open');
-                elements.sidebarOverlay.classList.toggle('visible', isOpen);
-                elements.btnSidebarToggle.classList.toggle('sidebar-open', isOpen);
-            });
+            elements.btnSidebarToggle.addEventListener('click', toggleSidebar);
         }
         if (elements.sidebarOverlay) {
             elements.sidebarOverlay.addEventListener('click', () => {
                 elements.sidebar.classList.remove('open');
+                elements.sidebar.classList.add('hidden');
                 elements.sidebarOverlay.classList.remove('visible');
-                elements.btnSidebarToggle.classList.remove('sidebar-open');
+                elements.btnSidebarToggle.classList.add('sidebar-hidden');
             });
         }
 
         // Dropdown actions
         elements.btnImport.addEventListener('click', () => {
-            elements.dropdownMenu.hidden = true;
+            elements.addRecipeDropdown.hidden = true;
+            elements.btnAddRecipe.parentElement.classList.remove('open');
             elements.importFile.click();
         });
         elements.btnBulkImport.addEventListener('click', () => {
-            elements.dropdownMenu.hidden = true;
+            elements.addRecipeDropdown.hidden = true;
+            elements.btnAddRecipe.parentElement.classList.remove('open');
             elements.bulkUrls.value = '';
             openModal(elements.modalBulkImport);
         });
@@ -1974,7 +1946,8 @@
         // Photo import
         if (elements.btnPhotoImport) {
             elements.btnPhotoImport.addEventListener('click', () => {
-                elements.dropdownMenu.hidden = true;
+                elements.addRecipeDropdown.hidden = true;
+                elements.btnAddRecipe.parentElement.classList.remove('open');
                 openPhotoImportModal();
             });
         }
@@ -1998,40 +1971,30 @@
         if (elements.photoFile) {
             elements.photoFile.addEventListener('change', (e) => {
                 handlePhotoSelect(e.target.files);
-                // Reset the input so the same files can be selected again
                 e.target.value = '';
             });
         }
-        // Remove photo button is now handled dynamically in updatePhotoPreviewDisplay
         if (elements.btnProcessPhoto) {
             elements.btnProcessPhoto.addEventListener('click', processCookbookPhoto);
         }
 
-        // Inline bookmarklet - prevent navigation when clicked (it's meant to be dragged)
+        // Bookmarklet
         elements.bookmarkletDrag.addEventListener('click', (e) => {
             e.preventDefault();
             showToast('Drag this button to your bookmarks bar!');
         });
 
-        // Sidebar search
-        elements.sidebarSearch.addEventListener('input', handleSearch);
+        // Header search
+        elements.headerSearch.addEventListener('input', handleSearch);
 
-        // Sidebar navigation - Library section
+        // Sidebar navigation
         document.querySelectorAll('.sidebar-item[data-filter]').forEach(item => {
             item.addEventListener('click', () => {
                 handleSidebarFilter(item.dataset.filter);
             });
         });
 
-        // Sidebar section toggles
-        document.querySelectorAll('.sidebar-section-header[data-toggle]').forEach(header => {
-            header.addEventListener('click', () => {
-                const sectionId = header.dataset.toggle + '-section';
-                toggleSidebarSection(sectionId);
-            });
-        });
-
-        // Sidebar tags - use event delegation since tags are rendered dynamically
+        // Sidebar tags - event delegation
         elements.sidebarTags.addEventListener('click', (e) => {
             const item = e.target.closest('.sidebar-item');
             if (item && item.dataset.filter) {
@@ -2039,9 +2002,8 @@
             }
         });
 
-        // Sidebar folders - use event delegation
+        // Sidebar folders - event delegation
         elements.sidebarFolders.addEventListener('click', (e) => {
-            // Check if delete button was clicked
             const deleteBtn = e.target.closest('.sidebar-folder-delete');
             if (deleteBtn) {
                 e.stopPropagation();
@@ -2055,7 +2017,6 @@
                 return;
             }
 
-            // Otherwise handle filter
             const item = e.target.closest('.sidebar-item');
             if (item && item.dataset.filter) {
                 handleSidebarFilter(item.dataset.filter);
@@ -2074,22 +2035,6 @@
                     showToast('Folder already exists');
                 }
             }
-        });
-
-        // See all categories button
-        elements.btnSeeAllCategories.addEventListener('click', () => {
-            // Expand the categories section and show all tags
-            elements.categoriesSection.classList.remove('collapsed');
-            const tags = getAllTags();
-            elements.sidebarTags.innerHTML = tags.map(tag => `
-                <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
-                    </svg>
-                    ${escapeHtml(tag)}
-                </button>
-            `).join('');
         });
 
         // Close card menus when clicking outside
@@ -2159,7 +2104,7 @@
 
         document.getElementById('btn-delete-recipe').addEventListener('click', () => {
             if (currentViewingRecipe && confirm('Delete this recipe?')) {
-                deleteRecipe(currentViewingRecipe.id);
+                deleteRecipeById(currentViewingRecipe.id);
                 closeModal(elements.modalView);
                 renderRecipes();
                 renderTagsFilter();
@@ -2202,7 +2147,6 @@
                         addRecipeToFolder(currentViewingRecipe.id, folderId);
                         showToast('Added to folder');
                     }
-                    // Update current viewing recipe
                     currentViewingRecipe = getRecipeById(currentViewingRecipe.id);
                     populateViewFolderList();
                     renderFolders();
@@ -2219,19 +2163,36 @@
             }
         });
 
-        // Modal close buttons - use event delegation for more reliability
-        document.querySelectorAll('.modal-close').forEach(el => {
+        // View photos gallery - lightbox
+        if (elements.viewPhotosGallery) {
+            elements.viewPhotosGallery.addEventListener('click', (e) => {
+                const photoItem = e.target.closest('.view-photo-item');
+                if (photoItem && currentViewingRecipe && currentViewingRecipe.photos) {
+                    const index = parseInt(photoItem.dataset.index);
+                    openLightbox(currentViewingRecipe.photos, index);
+                }
+            });
+        }
+
+        // Lightbox controls
+        if (elements.photoLightbox) {
+            elements.photoLightbox.querySelectorAll('[data-close-lightbox]').forEach(el => {
+                el.addEventListener('click', closeLightbox);
+            });
+            elements.lightboxPrev.addEventListener('click', lightboxPrev);
+            elements.lightboxNext.addEventListener('click', lightboxNext);
+        }
+
+        // Modal close - using data attributes
+        document.querySelectorAll('[data-close-modal]').forEach(el => {
+            el.addEventListener('click', closeAllModals);
+        });
+
+        // Modal close buttons
+        document.querySelectorAll('.modal-close-btn').forEach(el => {
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                closeAllModals();
-            });
-        });
-
-        // Modal backdrop clicks
-        document.querySelectorAll('.modal-backdrop').forEach(el => {
-            el.addEventListener('click', (e) => {
-                e.preventDefault();
                 closeAllModals();
             });
         });
@@ -2241,26 +2202,26 @@
             el.addEventListener('click', (e) => e.stopPropagation());
         });
 
-        // Also handle clicks on the modal element itself (outside modal-content)
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                // If clicked directly on the modal (not on backdrop or content), close it
-                if (e.target === modal) {
-                    closeAllModals();
-                }
-            });
-        });
-
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                closeAllModals();
+                if (!elements.photoLightbox.hidden) {
+                    closeLightbox();
+                } else {
+                    closeAllModals();
+                }
+            }
+
+            // Lightbox navigation
+            if (!elements.photoLightbox.hidden) {
+                if (e.key === 'ArrowLeft') lightboxPrev();
+                if (e.key === 'ArrowRight') lightboxNext();
             }
 
             // Ctrl/Cmd + K for search
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                elements.sidebarSearch.focus();
+                elements.headerSearch.focus();
             }
         });
     }
