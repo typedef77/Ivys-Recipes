@@ -124,7 +124,7 @@ h1, h2, h3, h4 {
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    z-index: 998;
+    z-index: 1001;
     align-items: center;
     justify-content: center;
     padding: 0.75rem 0.5rem;
@@ -134,7 +134,7 @@ h1, h2, h3, h4 {
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     cursor: pointer;
     color: var(--color-text-light);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
 }
 
 .btn-sidebar-toggle:hover {
@@ -150,6 +150,11 @@ h1, h2, h3, h4 {
 
 .btn-sidebar-toggle.sidebar-open svg {
     transform: rotate(180deg);
+}
+
+/* When sidebar is open, move toggle to sidebar edge */
+.btn-sidebar-toggle.sidebar-open {
+    left: var(--sidebar-width);
 }
 
 /* App Layout */
@@ -193,6 +198,14 @@ h1, h2, h3, h4 {
     align-items: center;
     justify-content: flex-end;
     gap: 1rem;
+    position: relative;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
 }
 
 .nav-actions {
@@ -211,8 +224,7 @@ h1, h2, h3, h4 {
 }
 
 .menu-container {
-    position: absolute;
-    right: 1.5rem;
+    position: relative;
 }
 
 .nav-actions .btn-icon {
@@ -895,8 +907,53 @@ h1, h2, h3, h4 {
 }
 
 #photo-preview-container {
-    text-align: center;
     margin-bottom: 1rem;
+}
+
+.photo-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.photo-preview-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.photo-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.photo-remove-btn {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: white;
+    transition: background 0.2s;
+}
+
+.photo-remove-btn:hover {
+    background: rgba(196, 77, 77, 0.9);
+}
+
+.photo-preview-actions {
+    text-align: center;
 }
 
 #photo-preview {

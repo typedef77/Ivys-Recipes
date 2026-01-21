@@ -30,15 +30,16 @@
                 </div>
             </div>
             <div class="header-content">
-                <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
-                <div class="menu-container">
-                    <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="1"></circle>
-                            <circle cx="12" cy="5" r="1"></circle>
-                            <circle cx="12" cy="19" r="1"></circle>
-                        </svg>
-                    </button>
+                <div class="header-actions">
+                    <button id="btn-add-recipe" class="btn btn-primary">+ Add Recipe</button>
+                    <div class="menu-container">
+                        <button id="btn-menu" class="btn btn-icon" aria-label="Menu">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="1"></circle>
+                                <circle cx="12" cy="5" r="1"></circle>
+                                <circle cx="12" cy="19" r="1"></circle>
+                            </svg>
+                        </button>
                     <!-- Dropdown Menu -->
                     <div id="dropdown-menu" class="dropdown-menu" hidden>
                         <button id="btn-import" class="dropdown-item">
@@ -78,6 +79,7 @@
                             </svg>
                             Install App
                         </button>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -462,7 +464,7 @@ https://cooking.nytimes.com/..."></textarea>
     </div>
 
     <input type="file" id="import-file" accept=".json,.paprikarecipes,.html,.htm" hidden>
-    <input type="file" id="photo-file" accept="image/*" capture="environment" hidden>
+    <input type="file" id="photo-file" accept="image/*" multiple hidden>
 
     <script src="app.js"></script>
 </body>
