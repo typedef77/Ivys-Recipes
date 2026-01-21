@@ -9,14 +9,107 @@
     // ============================================
 
     const STORAGE_KEY = 'ivys_recipes';
+    const FOLDERS_KEY = 'ivys_folders';
 
     function getRecipes() {
         try {
             const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
+            let recipes = data ? JSON.parse(data) : [];
+            // Migrate/clean tags on load
+            let needsSave = false;
+            recipes = recipes.map(recipe => {
+                if (recipe.tags && recipe.tags.length > 0) {
+                    const cleanedTags = cleanTags(recipe.tags);
+                    if (JSON.stringify(cleanedTags) !== JSON.stringify(recipe.tags)) {
+                        recipe.tags = cleanedTags;
+                        needsSave = true;
+                    }
+                }
+                return recipe;
+            });
+            if (needsSave) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+            }
+            return recipes;
         } catch (e) {
             console.error('Error reading recipes:', e);
             return [];
+        }
+    }
+
+    function cleanTags(tags) {
+        if (!tags || !Array.isArray(tags)) return [];
+        // Flatten any comma-separated tags, dedupe case-insensitively, capitalize properly
+        const allTags = [];
+        tags.forEach(tag => {
+            if (typeof tag === 'string') {
+                // Split by comma, semicolon, or slash
+                const parts = tag.split(/[,;\/]/).map(t => t.trim()).filter(Boolean);
+                allTags.push(...parts);
+            }
+        });
+        // Deduplicate case-insensitively
+        const seen = new Map();
+        allTags.forEach(tag => {
+            const lower = tag.toLowerCase().trim();
+            if (lower && !seen.has(lower)) {
+                seen.set(lower, capitalizeTag(lower));
+            }
+        });
+        return Array.from(seen.values());
+    }
+
+    function getFolders() {
+        try {
+            const data = localStorage.getItem(FOLDERS_KEY);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            console.error('Error reading folders:', e);
+            return [];
+        }
+    }
+
+    function saveFolders(folders) {
+        try {
+            localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+        } catch (e) {
+            console.error('Error saving folders:', e);
+        }
+    }
+
+    function addFolder(name) {
+        const folders = getFolders();
+        if (folders.some(f => f.name.toLowerCase() === name.toLowerCase())) {
+            return null; // Already exists
+        }
+        const folder = {
+            id: generateId(),
+            name: name,
+            createdAt: new Date().toISOString()
+        };
+        folders.push(folder);
+        saveFolders(folders);
+        return folder;
+    }
+
+    function addRecipeToFolder(recipeId, folderId) {
+        const recipes = getRecipes();
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (recipe) {
+            if (!recipe.folders) recipe.folders = [];
+            if (!recipe.folders.includes(folderId)) {
+                recipe.folders.push(folderId);
+                saveRecipes(recipes);
+            }
+        }
+    }
+
+    function removeRecipeFromFolder(recipeId, folderId) {
+        const recipes = getRecipes();
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (recipe && recipe.folders) {
+            recipe.folders = recipe.folders.filter(f => f !== folderId);
+            saveRecipes(recipes);
         }
     }
 
