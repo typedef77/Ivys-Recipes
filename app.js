@@ -2183,23 +2183,23 @@
             elements.lightboxNext.addEventListener('click', lightboxNext);
         }
 
-        // Modal close - using data attributes
-        document.querySelectorAll('[data-close-modal]').forEach(el => {
-            el.addEventListener('click', closeAllModals);
-        });
+        // Modal close - using event delegation for reliability
+        document.addEventListener('click', (e) => {
+            // Check if clicked on backdrop
+            if (e.target.classList.contains('modal-backdrop') || e.target.hasAttribute('data-close-modal')) {
+                e.preventDefault();
+                closeAllModals();
+                return;
+            }
 
-        // Modal close buttons
-        document.querySelectorAll('.modal-close-btn').forEach(el => {
-            el.addEventListener('click', (e) => {
+            // Check if clicked on close button or its children (like the SVG)
+            const closeBtn = e.target.closest('.modal-close-btn');
+            if (closeBtn) {
                 e.preventDefault();
                 e.stopPropagation();
                 closeAllModals();
-            });
-        });
-
-        // Prevent closing when clicking modal content
-        document.querySelectorAll('.modal-content').forEach(el => {
-            el.addEventListener('click', (e) => e.stopPropagation());
+                return;
+            }
         });
 
         // Keyboard shortcuts
