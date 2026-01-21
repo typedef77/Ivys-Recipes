@@ -803,43 +803,61 @@
             metaParts.push(`<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>${escapeHtml(recipe.servings)}</span>`);
         }
 
+        // Tags with "more" button
+        const tags = recipe.tags || [];
+        const maxVisibleTags = 2;
+        const visibleTags = tags.slice(0, maxVisibleTags);
+        const hiddenTags = tags.slice(maxVisibleTags);
+        let tagsHtml = '';
+        if (tags.length > 0) {
+            tagsHtml = `<div class="recipe-card-tags">
+                ${visibleTags.map(t => `<span class="recipe-card-tag">${escapeHtml(t)}</span>`).join('')}
+                ${hiddenTags.length > 0 ? `<span class="recipe-card-tag more-tags" data-action="show-more-tags" title="${hiddenTags.map(t => escapeHtml(t)).join(', ')}">+${hiddenTags.length} more</span>` : ''}
+            </div>`;
+        }
+
         card.innerHTML = `
             ${imageHtml}
             <div class="recipe-card-content">
                 <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
                 ${metaParts.length ? `<div class="recipe-card-meta">${metaParts.join('')}</div>` : ''}
+                ${tagsHtml}
             </div>
         `;
 
         // Handle card clicks
         card.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
+            const recipeId = recipe.id; // Store ID for closure
+
             if (btn) {
                 e.stopPropagation();
+                e.preventDefault();
                 const action = btn.dataset.action;
 
                 if (action === 'favorite') {
-                    toggleFavorite(recipe.id);
+                    toggleFavorite(recipeId);
                 } else if (action === 'toggle-menu') {
                     toggleCardMenu(card);
                 } else if (action === 'edit') {
                     closeAllCardMenus();
-                    openEditModal(recipe.id);
+                    openEditModal(recipeId);
                 } else if (action === 'delete') {
                     closeAllCardMenus();
                     if (confirm('Are you sure you want to delete this recipe?')) {
-                        deleteRecipe(recipe.id);
+                        deleteRecipe(recipeId);
                     }
                 } else if (action === 'toggle-folder') {
                     closeAllCardMenus();
                     const folderId = btn.dataset.folderId;
-                    const updatedRecipe = getRecipeById(recipe.id);
-                    const isInFolder = updatedRecipe.folders && updatedRecipe.folders.includes(folderId);
+                    const currentRecipe = getRecipeById(recipeId);
+                    if (!currentRecipe) return;
+                    const isInFolder = currentRecipe.folders && currentRecipe.folders.includes(folderId);
                     if (isInFolder) {
-                        removeRecipeFromFolder(recipe.id, folderId);
+                        removeRecipeFromFolder(recipeId, folderId);
                         showToast('Removed from folder');
                     } else {
-                        addRecipeToFolder(recipe.id, folderId);
+                        addRecipeToFolder(recipeId, folderId);
                         showToast('Added to folder');
                     }
                     renderRecipes();
@@ -850,16 +868,24 @@
                     if (folderName && folderName.trim()) {
                         const folder = addFolder(folderName.trim());
                         if (folder) {
-                            addRecipeToFolder(recipe.id, folder.id);
+                            addRecipeToFolder(recipeId, folder.id);
                             renderFolders();
+                            renderRecipes();
                             showToast(`Added to "${folder.name}"`);
                         } else {
                             showToast('Folder already exists');
                         }
                     }
+                } else if (action === 'show-more-tags') {
+                    // Show all tags - get fresh recipe data
+                    const currentRecipe = getRecipeById(recipeId);
+                    if (!currentRecipe) return;
+                    const tagsContainer = btn.closest('.recipe-card-tags');
+                    const allTags = currentRecipe.tags || [];
+                    tagsContainer.innerHTML = allTags.map(t => `<span class="recipe-card-tag">${escapeHtml(t)}</span>`).join('');
                 }
             } else {
-                openViewModal(recipe.id);
+                openViewModal(recipeId);
             }
         });
 
@@ -1766,8 +1792,7 @@
     // Cookbook Photo Import
     // ============================================
 
-    let selectedPhotoFile = null;
-    let selectedPhotoDataUrl = null;
+    let selectedPhotos = []; // Array of {file, dataUrl}
 
     function openPhotoImportModal() {
         resetPhotoImport();
@@ -1775,49 +1800,111 @@
     }
 
     function resetPhotoImport() {
-        selectedPhotoFile = null;
-        selectedPhotoDataUrl = null;
+        selectedPhotos = [];
         if (elements.photoImportArea) elements.photoImportArea.hidden = false;
         if (elements.photoPreviewContainer) elements.photoPreviewContainer.hidden = true;
-        if (elements.photoPreview) elements.photoPreview.src = '';
         if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = true;
         if (elements.photoFile) elements.photoFile.value = '';
+        updatePhotoPreviewDisplay();
     }
 
-    function handlePhotoSelect(file) {
-        if (!file || !file.type.startsWith('image/')) {
-            showToast('Please select an image file');
+    function updatePhotoPreviewDisplay() {
+        const previewContainer = elements.photoPreviewContainer;
+        if (!previewContainer) return;
+
+        if (selectedPhotos.length === 0) {
+            previewContainer.hidden = true;
+            elements.photoImportArea.hidden = false;
+            if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = true;
             return;
         }
 
-        selectedPhotoFile = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            selectedPhotoDataUrl = e.target.result;
-            elements.photoPreview.src = selectedPhotoDataUrl;
-            elements.photoImportArea.hidden = true;
-            elements.photoPreviewContainer.hidden = false;
-            elements.btnProcessPhoto.disabled = false;
-        };
-        reader.readAsDataURL(file);
+        // Show preview container with all photos
+        previewContainer.hidden = false;
+        elements.photoImportArea.hidden = true;
+        if (elements.btnProcessPhoto) elements.btnProcessPhoto.disabled = false;
+
+        // Create preview HTML
+        const previewHtml = `
+            <div class="photo-preview-grid">
+                ${selectedPhotos.map((photo, i) => `
+                    <div class="photo-preview-item">
+                        <img src="${photo.dataUrl}" alt="Recipe photo ${i + 1}">
+                        <button type="button" class="photo-remove-btn" data-index="${i}" title="Remove photo">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="photo-preview-actions">
+                <button type="button" id="btn-add-more-photos" class="btn btn-secondary btn-sm">Add More Photos</button>
+            </div>
+        `;
+        previewContainer.innerHTML = previewHtml;
+
+        // Add event listeners for remove buttons
+        previewContainer.querySelectorAll('.photo-remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = parseInt(btn.dataset.index);
+                selectedPhotos.splice(index, 1);
+                updatePhotoPreviewDisplay();
+            });
+        });
+
+        // Add event listener for "Add More Photos" button
+        const addMoreBtn = previewContainer.querySelector('#btn-add-more-photos');
+        if (addMoreBtn) {
+            addMoreBtn.addEventListener('click', () => {
+                elements.photoFile.click();
+            });
+        }
+    }
+
+    function handlePhotoSelect(files) {
+        const fileList = files instanceof FileList ? Array.from(files) : [files];
+
+        fileList.forEach(file => {
+            if (!file || !file.type.startsWith('image/')) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                selectedPhotos.push({
+                    file: file,
+                    dataUrl: e.target.result
+                });
+                updatePhotoPreviewDisplay();
+            };
+            reader.readAsDataURL(file);
+        });
     }
 
     function processCookbookPhoto() {
-        if (!selectedPhotoDataUrl) return;
+        if (selectedPhotos.length === 0) return;
 
         // Close photo modal and open recipe form
         closeModal(elements.modalPhotoImport);
         openAddModal();
 
-        // Set the image in the form
-        document.getElementById('recipe-image').value = selectedPhotoDataUrl;
-        elements.imagePreview.style.backgroundImage = `url(${selectedPhotoDataUrl})`;
+        // Use the first photo as the main image
+        const mainPhotoUrl = selectedPhotos[0].dataUrl;
+        document.getElementById('recipe-image').value = mainPhotoUrl;
+        elements.imagePreview.style.backgroundImage = `url(${mainPhotoUrl})`;
         elements.imagePreview.hidden = false;
 
         // Add "Cookbook" as a default tag
         document.getElementById('recipe-tags').value = 'Cookbook';
 
-        showToast('Photo added! Fill in the recipe details.');
+        // If multiple photos, add note about additional photos
+        if (selectedPhotos.length > 1) {
+            document.getElementById('recipe-notes').value = `Additional recipe photos: ${selectedPhotos.length} images uploaded`;
+            showToast(`${selectedPhotos.length} photos added! Fill in the recipe details.`);
+        } else {
+            showToast('Photo added! Fill in the recipe details.');
+        }
     }
 
 
@@ -1905,19 +1992,17 @@
             elements.photoImportArea.addEventListener('drop', (e) => {
                 e.preventDefault();
                 elements.photoImportArea.style.borderColor = '';
-                const file = e.dataTransfer.files[0];
-                handlePhotoSelect(file);
+                handlePhotoSelect(e.dataTransfer.files);
             });
         }
         if (elements.photoFile) {
             elements.photoFile.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                handlePhotoSelect(file);
+                handlePhotoSelect(e.target.files);
+                // Reset the input so the same files can be selected again
+                e.target.value = '';
             });
         }
-        if (elements.btnRemovePhoto) {
-            elements.btnRemovePhoto.addEventListener('click', resetPhotoImport);
-        }
+        // Remove photo button is now handled dynamically in updatePhotoPreviewDisplay
         if (elements.btnProcessPhoto) {
             elements.btnProcessPhoto.addEventListener('click', processCookbookPhoto);
         }
@@ -2134,14 +2219,36 @@
             }
         });
 
-        // Modal close buttons
-        document.querySelectorAll('.modal-close, .modal-backdrop').forEach(el => {
-            el.addEventListener('click', closeAllModals);
+        // Modal close buttons - use event delegation for more reliability
+        document.querySelectorAll('.modal-close').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                closeAllModals();
+            });
+        });
+
+        // Modal backdrop clicks
+        document.querySelectorAll('.modal-backdrop').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeAllModals();
+            });
         });
 
         // Prevent closing when clicking modal content
         document.querySelectorAll('.modal-content').forEach(el => {
             el.addEventListener('click', (e) => e.stopPropagation());
+        });
+
+        // Also handle clicks on the modal element itself (outside modal-content)
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                // If clicked directly on the modal (not on backdrop or content), close it
+                if (e.target === modal) {
+                    closeAllModals();
+                }
+            });
         });
 
         // Keyboard shortcuts
