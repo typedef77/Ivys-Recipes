@@ -1,8 +1,10 @@
 {
     "name": "Ivy's Recipes",
-    "short_name": "Recipes",
+    "short_name": "Ivy's Recipes",
     "description": "Save, organize, and find your favorite recipes",
-    "start_url": "/",
+    "start_url": "./",
+    "scope": "./",
+    "id": "ivys-recipes",
     "display": "standalone",
     "background_color": "#faf8f5",
     "theme_color": "#7b9971",
@@ -65,12 +67,19 @@
     ],
     "categories": ["food", "lifestyle", "utilities"],
     "share_target": {
-        "action": "/",
-        "method": "GET",
+        "action": "./?share=photos",
+        "method": "POST",
+        "enctype": "multipart/form-data",
         "params": {
             "title": "title",
             "text": "text",
-            "url": "url"
+            "url": "url",
+            "files": [
+                {
+                    "name": "photos",
+                    "accept": ["image/*", ".jpg", ".jpeg", ".png", ".webp", ".gif"]
+                }
+            ]
         }
     },
     "shortcuts": [
@@ -78,7 +87,7 @@
             "name": "Add Recipe",
             "short_name": "Add",
             "description": "Add a new recipe to your collection",
-            "url": "/?action=add",
+            "url": "./?action=add",
             "icons": [
                 {
                     "src": "icons/icon-96.png",
@@ -86,5 +95,10 @@
                 }
             ]
         }
-    ]
+    ],
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    },
+    "handle_links": "preferred",
+    "prefer_related_applications": false
 }
