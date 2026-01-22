@@ -168,6 +168,43 @@
         }
     }
 
+    // Force sync all local data to cloud
+    async function syncLocalToCloud() {
+        if (!useCloud || !database) {
+            console.warn('Cloud sync not available');
+            showToast('Cloud sync not available');
+            return false;
+        }
+
+        try {
+            console.log('Starting sync of local data to cloud...');
+            showToast('Syncing recipes to cloud...');
+
+            // Get local data
+            const localRecipesData = localStorage.getItem(STORAGE_KEY);
+            const localFoldersData = localStorage.getItem(FOLDERS_KEY);
+
+            const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
+            const localFolders = localFoldersData ? JSON.parse(localFoldersData) : [];
+
+            // Upload to cloud
+            const recipesSuccess = await saveToCloud(localRecipes);
+            const foldersSuccess = await saveFoldersToCloud(localFolders);
+
+            if (recipesSuccess && foldersSuccess) {
+                console.log(`Successfully synced ${localRecipes.length} recipes and ${localFolders.length} folders to cloud`);
+                showToast(`Synced ${localRecipes.length} recipes to cloud!`);
+                return true;
+            } else {
+                throw new Error('Failed to sync some data');
+            }
+        } catch (e) {
+            console.error('Error syncing local data to cloud:', e);
+            showToast('Error syncing to cloud');
+            return false;
+        }
+    }
+
     // Listen for real-time updates from Firebase
     function setupCloudListeners() {
         if (!useCloud || !database) return;
@@ -226,11 +263,14 @@
         }
     }
 
-    function saveFolders(folders) {
+    async function saveFolders(folders) {
         try {
             localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
-            // Also save to cloud
-            saveFoldersToCloud(folders);
+            // Also save to cloud and wait for completion
+            const cloudSaveSuccess = await saveFoldersToCloud(folders);
+            if (!cloudSaveSuccess && useCloud) {
+                console.warn('Cloud save failed for folders, data only saved locally');
+            }
         } catch (e) {
             console.error('Error saving folders:', e);
         }
@@ -282,12 +322,16 @@
         }
     }
 
-    function saveRecipes(recipes) {
+    async function saveRecipes(recipes) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
-            // Also save to cloud
+            // Also save to cloud and wait for completion
             lastSyncTime = Date.now();
-            saveToCloud(recipes);
+            const cloudSaveSuccess = await saveToCloud(recipes);
+            if (!cloudSaveSuccess && useCloud) {
+                console.warn('Cloud save failed, data only saved locally');
+                showToast('Warning: Changes saved locally only');
+            }
         } catch (e) {
             console.error('Error saving recipes:', e);
             showToast('Error saving recipes');
@@ -2511,6 +2555,15 @@
             handleInstall();
         });
 
+        // Sync button
+        const btnSync = document.getElementById('btn-sync');
+        if (btnSync) {
+            btnSync.addEventListener('click', async () => {
+                elements.dropdownMenu.hidden = true;
+                await syncLocalToCloud();
+            });
+        }
+
         // Logout button
         const btnLogout = document.getElementById('btn-logout');
         if (btnLogout) {
@@ -3255,6 +3308,18 @@
         if (firebaseInitialized) {
             await loadFromCloud();
             setupCloudListeners();
+
+            // Check if we need to sync local data to cloud
+            const localRecipesData = localStorage.getItem(STORAGE_KEY);
+            const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
+
+            // If cloud is empty but we have local recipes, sync them to cloud
+            if (cloudRecipes.length === 0 && localRecipes.length > 0) {
+                console.log('Cloud is empty but found local recipes. Syncing to cloud...');
+                await syncLocalToCloud();
+                // Reload from cloud to update cloudRecipes
+                await loadFromCloud();
+            }
 
             // Migrate existing photos to cloud storage (runs in background)
             setTimeout(() => {
