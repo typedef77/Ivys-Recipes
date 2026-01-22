@@ -5,6 +5,40 @@
     'use strict';
 
     // ============================================
+    // Firebase Configuration
+    // ============================================
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDummy_Key_Replace_With_Real",
+        authDomain: "ivys-recipes.firebaseapp.com",
+        databaseURL: "https://ivys-recipes-default-rtdb.firebaseio.com",
+        projectId: "ivys-recipes",
+        storageBucket: "ivys-recipes.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:abcdef123456"
+    };
+
+    // Initialize Firebase
+    let firebaseApp = null;
+    let database = null;
+    let useCloud = false;
+
+    function initFirebase() {
+        try {
+            if (typeof firebase !== 'undefined') {
+                firebaseApp = firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                useCloud = true;
+                console.log('Firebase initialized successfully');
+                return true;
+            }
+        } catch (e) {
+            console.warn('Firebase initialization failed, using local storage:', e);
+        }
+        return false;
+    }
+
+    // ============================================
     // Storage & Data Management
     // ============================================
 
@@ -13,6 +47,11 @@
     const AUTH_KEY = 'ivys_auth';
     const SUGGESTED_FOLDER_NAME = 'Suggested Recipes';
     const IVY_PASSWORD = 'Ilikeivysrecipes1!';
+
+    // Cloud sync state
+    let cloudRecipes = null;
+    let cloudFolders = null;
+    let lastSyncTime = 0;
 
     // User state
     let isIvy = false;
@@ -42,6 +81,10 @@
 
     function getRecipes() {
         try {
+            // Use cloud data if available, otherwise fall back to local
+            if (cloudRecipes !== null) {
+                return cloudRecipes;
+            }
             const data = localStorage.getItem(STORAGE_KEY);
             let recipes = data ? JSON.parse(data) : [];
             return recipes;
@@ -49,6 +92,102 @@
             console.error('Error reading recipes:', e);
             return [];
         }
+    }
+
+    // Load recipes from Firebase
+    async function loadFromCloud() {
+        if (!useCloud || !database) return false;
+
+        try {
+            const recipesRef = database.ref('recipes');
+            const foldersRef = database.ref('folders');
+
+            const [recipesSnapshot, foldersSnapshot] = await Promise.all([
+                recipesRef.once('value'),
+                foldersRef.once('value')
+            ]);
+
+            const recipesData = recipesSnapshot.val();
+            const foldersData = foldersSnapshot.val();
+
+            cloudRecipes = recipesData ? Object.values(recipesData) : [];
+            cloudFolders = foldersData ? Object.values(foldersData) : [];
+
+            // Also save to local storage as cache
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudRecipes));
+            localStorage.setItem(FOLDERS_KEY, JSON.stringify(cloudFolders));
+
+            lastSyncTime = Date.now();
+            console.log('Loaded from cloud:', cloudRecipes.length, 'recipes');
+            return true;
+        } catch (e) {
+            console.error('Error loading from cloud:', e);
+            return false;
+        }
+    }
+
+    // Save recipes to Firebase
+    async function saveToCloud(recipes) {
+        if (!useCloud || !database) return false;
+
+        try {
+            const recipesRef = database.ref('recipes');
+            // Convert array to object with IDs as keys
+            const recipesObj = {};
+            recipes.forEach(r => {
+                recipesObj[r.id] = r;
+            });
+            await recipesRef.set(recipesObj);
+            cloudRecipes = recipes;
+            return true;
+        } catch (e) {
+            console.error('Error saving to cloud:', e);
+            return false;
+        }
+    }
+
+    // Save folders to Firebase
+    async function saveFoldersToCloud(folders) {
+        if (!useCloud || !database) return false;
+
+        try {
+            const foldersRef = database.ref('folders');
+            const foldersObj = {};
+            folders.forEach(f => {
+                foldersObj[f.id] = f;
+            });
+            await foldersRef.set(foldersObj);
+            cloudFolders = folders;
+            return true;
+        } catch (e) {
+            console.error('Error saving folders to cloud:', e);
+            return false;
+        }
+    }
+
+    // Listen for real-time updates from Firebase
+    function setupCloudListeners() {
+        if (!useCloud || !database) return;
+
+        database.ref('recipes').on('value', (snapshot) => {
+            const data = snapshot.val();
+            cloudRecipes = data ? Object.values(data) : [];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudRecipes));
+            // Only re-render if not during our own save
+            if (Date.now() - lastSyncTime > 1000) {
+                renderRecipes();
+                renderTagsFilter();
+            }
+        });
+
+        database.ref('folders').on('value', (snapshot) => {
+            const data = snapshot.val();
+            cloudFolders = data ? Object.values(data) : [];
+            localStorage.setItem(FOLDERS_KEY, JSON.stringify(cloudFolders));
+            if (Date.now() - lastSyncTime > 1000) {
+                renderFolders();
+            }
+        });
     }
 
     function cleanTags(tags) {
@@ -72,6 +211,10 @@
 
     function getFolders() {
         try {
+            // Use cloud data if available
+            if (cloudFolders !== null) {
+                return cloudFolders;
+            }
             const data = localStorage.getItem(FOLDERS_KEY);
             return data ? JSON.parse(data) : [];
         } catch (e) {
@@ -83,6 +226,8 @@
     function saveFolders(folders) {
         try {
             localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+            // Also save to cloud
+            saveFoldersToCloud(folders);
         } catch (e) {
             console.error('Error saving folders:', e);
         }
@@ -137,6 +282,9 @@
     function saveRecipes(recipes) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
+            // Also save to cloud
+            lastSyncTime = Date.now();
+            saveToCloud(recipes);
         } catch (e) {
             console.error('Error saving recipes:', e);
             showToast('Error saving recipes');
@@ -1973,8 +2121,8 @@
                 return;
             }
 
-            // Compress image before storing
-            compressImage(file, 1200, 0.8).then(compressedDataUrl => {
+            // Compress image before storing - use smaller size for mobile
+            compressImage(file, 800, 0.6).then(compressedDataUrl => {
                 selectedPhotos.push({
                     file: file,
                     dataUrl: compressedDataUrl
@@ -1982,16 +2130,16 @@
                 updatePhotoPreviewDisplay();
             }).catch(err => {
                 console.error('Error compressing image:', err);
-                // Fallback to regular reading
-                const reader = new FileReader();
-                reader.onload = (e) => {
+                // Fallback - try with even more compression
+                compressImage(file, 600, 0.4).then(compressedDataUrl => {
                     selectedPhotos.push({
                         file: file,
-                        dataUrl: e.target.result
+                        dataUrl: compressedDataUrl
                     });
                     updatePhotoPreviewDisplay();
-                };
-                reader.readAsDataURL(file);
+                }).catch(() => {
+                    showToast('Error processing image. Try a smaller photo.');
+                });
             });
         });
     }
@@ -2006,10 +2154,19 @@
                     let width = img.width;
                     let height = img.height;
 
-                    // Scale down if too large
-                    if (width > maxWidth) {
-                        height = (height * maxWidth) / width;
-                        width = maxWidth;
+                    // Scale down more aggressively for mobile storage limits
+                    // Max 800px width for cookbook photos to keep file size manageable
+                    const effectiveMaxWidth = maxWidth || 800;
+                    if (width > effectiveMaxWidth) {
+                        height = (height * effectiveMaxWidth) / width;
+                        width = effectiveMaxWidth;
+                    }
+
+                    // Also limit height to prevent very tall images
+                    const maxHeight = 1200;
+                    if (height > maxHeight) {
+                        width = (width * maxHeight) / height;
+                        height = maxHeight;
                     }
 
                     canvas.width = width;
@@ -2018,9 +2175,17 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Convert to JPEG for better compression
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-                    resolve(compressedDataUrl);
+                    // Use lower quality for better compression (0.6 instead of 0.8)
+                    const effectiveQuality = quality || 0.6;
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', effectiveQuality);
+
+                    // If still too large (>500KB), try again with lower quality
+                    if (compressedDataUrl.length > 500000 && effectiveQuality > 0.3) {
+                        canvas.toDataURL('image/jpeg', 0.4);
+                        resolve(canvas.toDataURL('image/jpeg', 0.4));
+                    } else {
+                        resolve(compressedDataUrl);
+                    }
                 };
                 img.onerror = reject;
                 img.src = e.target.result;
@@ -2693,8 +2858,33 @@
         const params = new URLSearchParams(window.location.search);
         const shareAction = params.get('share');
         const received = params.get('received');
+        const sharedUrl = params.get('url');
+        const sharedText = params.get('text');
+        const sharedTitle = params.get('title');
 
-        // Listen for messages from service worker
+        // Handle shared URL or text (from apps like NYT Cooking, browsers, etc.)
+        let urlToFetch = sharedUrl;
+        if (!urlToFetch && sharedText) {
+            // Try to extract URL from shared text
+            const urlMatch = sharedText.match(/https?:\/\/[^\s]+/);
+            if (urlMatch) {
+                urlToFetch = urlMatch[0];
+            }
+        }
+
+        if (urlToFetch) {
+            // Clean up URL params
+            window.history.replaceState({}, '', window.location.pathname);
+            // Open add modal and fetch the recipe
+            setTimeout(() => {
+                openAddModal(true);
+                elements.recipeUrl.value = urlToFetch;
+                handleFetchUrl();
+            }, 500);
+            return;
+        }
+
+        // Listen for messages from service worker (for photo shares)
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'SHARED_FILES') {
@@ -2785,9 +2975,23 @@
     // Initialize
     // ============================================
 
-    function init() {
+    async function init() {
         // Check auth status first
         const hasAuthed = checkAuth();
+
+        // Initialize Firebase for cloud sync
+        const firebaseInitialized = initFirebase();
+
+        // Show loading indicator
+        if (elements.recipeGrid) {
+            elements.recipeGrid.innerHTML = '<div class="loading-indicator">Loading recipes...</div>';
+        }
+
+        // Try to load from cloud first
+        if (firebaseInitialized) {
+            await loadFromCloud();
+            setupCloudListeners();
+        }
 
         renderRecipes();
         renderTagsFilter();
