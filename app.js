@@ -134,6 +134,7 @@
         if (!useCloud || !database) return false;
 
         try {
+            updateCloudSyncStatus('syncing');
             const recipesRef = database.ref('recipes');
             // Convert array to object with IDs as keys
             const recipesObj = {};
@@ -142,9 +143,11 @@
             });
             await recipesRef.set(recipesObj);
             cloudRecipes = recipes;
+            updateCloudSyncStatus('synced');
             return true;
         } catch (e) {
             console.error('Error saving to cloud:', e);
+            updateCloudSyncStatus('offline');
             return false;
         }
     }
@@ -213,6 +216,8 @@
             const data = snapshot.val();
             cloudRecipes = data ? Object.values(data) : [];
             localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudRecipes));
+            // Update sync status
+            updateCloudSyncStatus('synced');
             // Only re-render if not during our own save
             if (Date.now() - lastSyncTime > 1000) {
                 renderRecipes();
@@ -228,6 +233,42 @@
                 renderFolders();
             }
         });
+    }
+
+    // Cloud sync status management
+    function updateCloudSyncStatus(status) {
+        if (!elements.btnCloudSync) return;
+
+        elements.btnCloudSync.classList.remove('synced', 'syncing', 'offline');
+        elements.btnCloudSync.classList.add(status);
+
+        const tooltips = {
+            synced: 'Cloud sync active - recipes synced',
+            syncing: 'Syncing recipes to cloud...',
+            offline: 'Cloud sync offline - using local storage'
+        };
+
+        elements.btnCloudSync.title = tooltips[status] || '';
+        elements.btnCloudSync.setAttribute('aria-label', tooltips[status] || '');
+    }
+
+    function initCloudSyncButton() {
+        if (!elements.btnCloudSync) return;
+
+        if (useCloud) {
+            elements.btnCloudSync.hidden = false;
+            updateCloudSyncStatus('synced');
+
+            // Add click handler for manual sync
+            elements.btnCloudSync.addEventListener('click', async () => {
+                updateCloudSyncStatus('syncing');
+                await syncLocalToCloud();
+                updateCloudSyncStatus('synced');
+            });
+        } else {
+            elements.btnCloudSync.hidden = false;
+            updateCloudSyncStatus('offline');
+        }
     }
 
     function cleanTags(tags) {
@@ -794,6 +835,7 @@
         btnImport: document.getElementById('btn-import'),
         btnExport: document.getElementById('btn-export'),
         btnInstall: document.getElementById('btn-install'),
+        btnCloudSync: document.getElementById('btn-cloud-sync'),
         importFile: document.getElementById('import-file'),
         bookmarkletDrag: document.getElementById('bookmarklet-drag')
     };
@@ -3308,6 +3350,7 @@
         if (firebaseInitialized) {
             await loadFromCloud();
             setupCloudListeners();
+            initCloudSyncButton();
 
             // Check if we need to sync local data to cloud
             const localRecipesData = localStorage.getItem(STORAGE_KEY);
@@ -3325,6 +3368,9 @@
             setTimeout(() => {
                 migratePhotosToStorage();
             }, 2000); // Wait 2 seconds after load to avoid blocking UI
+        } else {
+            // Firebase failed to initialize, show offline status
+            initCloudSyncButton();
         }
 
         renderRecipes();

@@ -1,5 +1,5 @@
 // Ivy's Recipes - Service Worker
-const CACHE_NAME = 'ivys-recipes-v14';
+const CACHE_NAME = 'ivys-recipes-v15';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',

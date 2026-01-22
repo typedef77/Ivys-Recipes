@@ -123,6 +123,42 @@ h1, h2, h3, h4 {
     font-size: 0.875rem;
 }
 
+/* Cloud Sync Button */
+#btn-cloud-sync {
+    position: relative;
+    color: var(--color-text-muted);
+}
+
+#btn-cloud-sync:hover {
+    color: var(--color-accent);
+}
+
+#btn-cloud-sync.synced {
+    color: var(--color-accent);
+}
+
+#btn-cloud-sync.syncing {
+    color: var(--color-accent);
+}
+
+#btn-cloud-sync.syncing svg {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+#btn-cloud-sync.offline {
+    color: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
 /* App Layout */
 #app {
     display: flex;
