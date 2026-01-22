@@ -9,13 +9,14 @@
     // ============================================
 
     const firebaseConfig = {
-        apiKey: "AIzaSyDummy_Key_Replace_With_Real",
+        apiKey: "AIzaSyApw7nwjdtJsZ1f99esiYp-OYlaNX8dHVs",
         authDomain: "ivys-recipes.firebaseapp.com",
         databaseURL: "https://ivys-recipes-default-rtdb.firebaseio.com",
         projectId: "ivys-recipes",
-        storageBucket: "ivys-recipes.appspot.com",
-        messagingSenderId: "123456789",
-        appId: "1:123456789:web:abcdef123456"
+        storageBucket: "ivys-recipes.firebasestorage.app",
+        messagingSenderId: "665511694674",
+        appId: "1:665511694674:web:e05cd29239028375492a8b",
+        measurementId: "G-1VRYNEZT4T"
     };
 
     // Initialize Firebase
