@@ -51,7 +51,6 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
     // Skip cross-origin requests except for fonts and the CORS proxy
-    const url = new URL(event.request.url);
     const isExternalAsset = url.origin !== location.origin &&
         !url.href.includes('fonts.googleapis.com') &&
         !url.href.includes('fonts.gstatic.com');
@@ -91,7 +90,7 @@ self.addEventListener('fetch', (event) => {
                     .catch(() => {
                         // Network failed, try to return a fallback
                         if (event.request.destination === 'document') {
-                            return caches.match('/index.html');
+                            return caches.match('./index.html');
                         }
                     });
             })
