@@ -149,13 +149,13 @@ h1, h2, h3, h4 {
 }
 
 .logo {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-family: 'Pacifico', cursive;
+    font-size: 1.75rem;
+    font-weight: 400;
     color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
     margin: 0;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.02em;
 }
 
 .header-content {
@@ -163,6 +163,7 @@ h1, h2, h3, h4 {
     display: flex;
     align-items: center;
     gap: 1rem;
+    position: relative;
 }
 
 /* Sidebar Toggle in Header */
@@ -1593,5 +1594,215 @@ h1, h2, h3, h4 {
     .modal-content {
         box-shadow: none;
         max-height: none;
+    }
+}
+
+/* Auth Overlay */
+.auth-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: linear-gradient(135deg, #7a9e7e 0%, #8bab8f 50%, #a3c4a7 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.auth-overlay[hidden] {
+    display: none !important;
+}
+
+.auth-content {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 2.5rem;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+}
+
+.auth-icon {
+    color: var(--color-accent);
+    margin-bottom: 1rem;
+}
+
+.auth-title {
+    font-family: 'Pacifico', cursive;
+    font-size: 2rem;
+    color: var(--color-accent);
+    margin-bottom: 2rem;
+}
+
+.auth-section {
+    margin-top: 1.5rem;
+}
+
+.auth-question {
+    font-size: 1.25rem;
+    color: var(--color-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.auth-message {
+    font-size: 1rem;
+    color: var(--color-text-light);
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.auth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.auth-buttons .btn {
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+}
+
+.auth-password-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.auth-password-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+}
+
+.auth-password-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.auth-error {
+    color: var(--color-danger);
+    font-size: 0.875rem;
+}
+
+/* Collapsible Sections */
+.collapsible-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.collapsible-header:hover {
+    color: var(--color-text);
+}
+
+.collapse-icon {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-section.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.sidebar-section.collapsed .sidebar-tags,
+.sidebar-section.collapsed #sidebar-folders,
+.sidebar-section.collapsed .sidebar-item-add,
+.sidebar-section.collapsed .sidebar-section-content:not(:first-child) {
+    display: none;
+}
+
+/* More button styling */
+.sidebar-item-more {
+    color: var(--color-accent);
+    font-size: 0.875rem;
+}
+
+.sidebar-item-more:hover {
+    color: var(--color-accent-dark);
+    background-color: var(--color-accent-light);
+}
+
+/* Suggested folder styling */
+.sidebar-folder-suggested .sidebar-item {
+    background-color: rgba(122, 158, 126, 0.1);
+    border-left: 3px solid var(--color-accent);
+}
+
+.sidebar-folder-suggested .sidebar-item:hover {
+    background-color: rgba(122, 158, 126, 0.2);
+}
+
+.sidebar-item-count-new {
+    background-color: var(--color-accent);
+    color: white;
+}
+
+/* View suggestion info */
+.view-suggestion-info {
+    background-color: var(--color-cream);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    color: var(--color-accent-dark);
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--color-accent);
+}
+
+/* Center header elements better */
+.header-banner {
+    justify-content: center;
+    text-align: center;
+    position: relative;
+}
+
+.header-banner .logo {
+    text-align: center;
+}
+
+.bookmarklet-inline {
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Better search bar centering */
+.header-content {
+    justify-content: space-between;
+}
+
+.header-search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 400px;
+}
+
+@media (max-width: 768px) {
+    .header-search {
+        position: static;
+        transform: none;
+        flex: 1;
+        max-width: none;
+    }
+
+    .auth-content {
+        padding: 1.5rem;
+    }
+
+    .auth-title {
+        font-size: 1.75rem;
+    }
+
+    .auth-question {
+        font-size: 1.125rem;
     }
 }

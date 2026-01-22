@@ -10,6 +10,35 @@
 
     const STORAGE_KEY = 'ivys_recipes';
     const FOLDERS_KEY = 'ivys_folders';
+    const AUTH_KEY = 'ivys_auth';
+    const SUGGESTED_FOLDER_NAME = 'Suggested Recipes';
+    const IVY_PASSWORD = 'Ilikeivysrecipes1!';
+
+    // User state
+    let isIvy = false;
+
+    function checkAuth() {
+        const authData = localStorage.getItem(AUTH_KEY);
+        if (authData) {
+            try {
+                const parsed = JSON.parse(authData);
+                isIvy = parsed.isIvy === true;
+                return true; // Auth has been done before
+            } catch (e) {
+                return false;
+            }
+        }
+        return false; // Never authed
+    }
+
+    function setAuth(isIvyUser) {
+        isIvy = isIvyUser;
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ isIvy: isIvyUser, timestamp: Date.now() }));
+    }
+
+    function getIsIvy() {
+        return isIvy;
+    }
 
     function getRecipes() {
         try {
@@ -59,19 +88,29 @@
         }
     }
 
-    function addFolder(name) {
+    function addFolder(name, isSystem = false) {
         const folders = getFolders();
         if (folders.some(f => f.name.toLowerCase() === name.toLowerCase())) {
-            return null;
+            return folders.find(f => f.name.toLowerCase() === name.toLowerCase());
         }
         const folder = {
             id: generateId(),
             name: name,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            isSystem: isSystem
         };
         folders.push(folder);
         saveFolders(folders);
         return folder;
+    }
+
+    function getOrCreateSuggestedFolder() {
+        const folders = getFolders();
+        let suggestedFolder = folders.find(f => f.name === SUGGESTED_FOLDER_NAME);
+        if (!suggestedFolder) {
+            suggestedFolder = addFolder(SUGGESTED_FOLDER_NAME, true);
+        }
+        return suggestedFolder;
     }
 
     function addRecipeToFolder(recipeId, folderId) {
@@ -113,13 +152,37 @@
     // ============================================
 
     function addRecipe(recipe) {
-        const recipes = getRecipes();
-        recipe.id = generateId();
-        recipe.createdAt = new Date().toISOString();
-        recipe.updatedAt = recipe.createdAt;
-        recipes.unshift(recipe);
-        saveRecipes(recipes);
-        return recipe;
+        try {
+            const recipes = getRecipes();
+            recipe.id = generateId();
+            recipe.createdAt = new Date().toISOString();
+            recipe.updatedAt = recipe.createdAt;
+            recipes.unshift(recipe);
+
+            // Try to save - this may fail if localStorage is full
+            const saveResult = saveRecipesWithCheck(recipes);
+            if (!saveResult) {
+                return null;
+            }
+            return recipe;
+        } catch (e) {
+            console.error('Error adding recipe:', e);
+            return null;
+        }
+    }
+
+    function saveRecipesWithCheck(recipes) {
+        try {
+            const data = JSON.stringify(recipes);
+            localStorage.setItem(STORAGE_KEY, data);
+            return true;
+        } catch (e) {
+            console.error('Error saving recipes:', e);
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                showToast('Storage full! Try removing some recipes or using smaller images.');
+            }
+            return false;
+        }
     }
 
     function updateRecipe(id, updates) {
@@ -445,6 +508,9 @@
         contentTitle: document.getElementById('content-title'),
         recipeCount: document.getElementById('recipe-count'),
         btnAddFolder: document.getElementById('btn-add-folder'),
+        // Collapsible section headers
+        foldersSection: document.getElementById('folders-section'),
+        categoriesSection: document.getElementById('categories-section'),
         // Sidebar toggle
         sidebar: document.getElementById('sidebar'),
         sidebarOverlay: document.getElementById('sidebar-overlay'),
@@ -459,6 +525,8 @@
         btnMenu: document.getElementById('btn-menu'),
         dropdownMenu: document.getElementById('dropdown-menu'),
         btnPhotoImport: document.getElementById('btn-photo-import'),
+        // Auth overlay
+        authOverlay: document.getElementById('auth-overlay'),
         // Modals
         modalRecipe: document.getElementById('modal-recipe'),
         modalView: document.getElementById('modal-view'),
@@ -623,6 +691,42 @@
         `}).join('');
 
         const isFavorite = recipe.favorite ? 'active' : '';
+        const canEdit = isIvy;
+
+        // Build menu items based on permissions
+        let menuItems = '';
+        if (canEdit) {
+            menuItems += `
+                <button class="card-dropdown-item" data-action="edit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    Edit
+                </button>
+            `;
+            if (folders.length > 0) menuItems += `<div class="card-dropdown-divider"></div>`;
+            menuItems += folderOptions;
+            menuItems += `
+                <button class="card-dropdown-item" data-action="new-folder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        <line x1="12" y1="11" x2="12" y2="17"></line>
+                        <line x1="9" y1="14" x2="15" y2="14"></line>
+                    </svg>
+                    Add to new folder...
+                </button>
+                <div class="card-dropdown-divider"></div>
+                <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Delete
+                </button>
+            `;
+        }
+
         const overlayButtons = `
             <div class="card-overlay-buttons">
                 <button class="card-btn card-btn-favorite ${isFavorite}" data-action="favorite" title="Favorite">
@@ -630,6 +734,7 @@
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                     </svg>
                 </button>
+                ${canEdit ? `
                 <div class="card-menu-container">
                     <button class="card-btn card-btn-menu" data-action="toggle-menu" title="More options">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -639,33 +744,10 @@
                         </svg>
                     </button>
                     <div class="card-dropdown" hidden>
-                        <button class="card-dropdown-item" data-action="edit">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                            Edit
-                        </button>
-                        ${folders.length > 0 ? `<div class="card-dropdown-divider"></div>` : ''}
-                        ${folderOptions}
-                        <button class="card-dropdown-item" data-action="new-folder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                <line x1="12" y1="11" x2="12" y2="17"></line>
-                                <line x1="9" y1="14" x2="15" y2="14"></line>
-                            </svg>
-                            Add to new folder...
-                        </button>
-                        <div class="card-dropdown-divider"></div>
-                        <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                            Delete
-                        </button>
+                        ${menuItems}
                     </div>
                 </div>
+                ` : ''}
             </div>
         `;
 
@@ -852,10 +934,15 @@
         }
     }
 
+    let showAllCategories = false;
+
     function renderTagsFilter() {
         const tags = getAllTags();
-        const displayTags = tags.slice(0, 8);
-        elements.sidebarTags.innerHTML = displayTags.map(tag => `
+        const maxVisible = showAllCategories ? tags.length : 8;
+        const displayTags = tags.slice(0, maxVisible);
+        const hasMore = tags.length > 8;
+
+        let html = displayTags.map(tag => `
             <button class="sidebar-item ${currentFilter === tag ? 'active' : ''}" data-filter="${escapeHtml(tag)}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -864,6 +951,40 @@
                 ${escapeHtml(tag)}
             </button>
         `).join('');
+
+        if (hasMore) {
+            if (showAllCategories) {
+                html += `
+                    <button class="sidebar-item sidebar-item-more" id="btn-toggle-categories">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                        </svg>
+                        Show Less
+                    </button>
+                `;
+            } else {
+                html += `
+                    <button class="sidebar-item sidebar-item-more" id="btn-toggle-categories">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                        More (${tags.length - 8})
+                    </button>
+                `;
+            }
+        }
+
+        elements.sidebarTags.innerHTML = html;
+
+        // Add event listener for more button
+        const toggleBtn = document.getElementById('btn-toggle-categories');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                showAllCategories = !showAllCategories;
+                renderTagsFilter();
+            });
+        }
+
         updateSidebarActiveState();
     }
 
@@ -873,9 +994,17 @@
 
         if (!elements.sidebarFolders) return;
 
-        elements.sidebarFolders.innerHTML = folders.map(folder => {
+        // Separate suggested folder from regular folders
+        const suggestedFolder = folders.find(f => f.name === SUGGESTED_FOLDER_NAME);
+        const regularFolders = folders.filter(f => f.name !== SUGGESTED_FOLDER_NAME);
+
+        let html = '';
+
+        // Render regular folders first
+        html += regularFolders.map(folder => {
             const count = recipes.filter(r => r.folders && r.folders.includes(folder.id)).length;
             const isActive = currentFilter === `folder:${folder.id}`;
+            const canDelete = isIvy; // Only Ivy can delete folders
             return `
                 <div class="sidebar-folder-item ${isActive ? 'active' : ''}">
                     <button class="sidebar-item" data-filter="folder:${folder.id}">
@@ -885,14 +1014,37 @@
                         ${escapeHtml(folder.name)}
                         <span class="sidebar-item-count">${count}</span>
                     </button>
+                    ${canDelete ? `
                     <button class="sidebar-folder-delete" data-folder-id="${folder.id}" title="Delete folder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 6 6 18M6 6l12 12"></path>
                         </svg>
                     </button>
+                    ` : ''}
                 </div>
             `;
         }).join('');
+
+        // Render suggested folder (only visible to Ivy, with special styling)
+        if (suggestedFolder && isIvy) {
+            const count = recipes.filter(r => r.folders && r.folders.includes(suggestedFolder.id)).length;
+            const isActive = currentFilter === `folder:${suggestedFolder.id}`;
+            if (count > 0) {
+                html += `
+                    <div class="sidebar-folder-item sidebar-folder-suggested ${isActive ? 'active' : ''}">
+                        <button class="sidebar-item" data-filter="folder:${suggestedFolder.id}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            ${escapeHtml(suggestedFolder.name)}
+                            <span class="sidebar-item-count sidebar-item-count-new">${count}</span>
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        elements.sidebarFolders.innerHTML = html;
     }
 
     function deleteFolder(folderId) {
@@ -950,7 +1102,7 @@
     // ============================================
 
     function openAddModal(showUrl = true) {
-        elements.modalTitle.textContent = 'Add Recipe';
+        elements.modalTitle.textContent = isIvy ? 'Add Recipe' : 'Suggest Recipe';
         elements.recipeForm.reset();
         document.getElementById('recipe-id').value = '';
         document.getElementById('recipe-photos').value = '[]';
@@ -966,6 +1118,12 @@
         // Remove required from ingredients/instructions
         document.getElementById('recipe-ingredients').removeAttribute('required');
         document.getElementById('recipe-instructions').removeAttribute('required');
+
+        // Show/hide suggester name section for non-Ivy users
+        const suggesterSection = document.getElementById('suggester-section');
+        if (suggesterSection) {
+            suggesterSection.hidden = isIvy;
+        }
 
         // Show/hide URL section
         if (showUrl) {
@@ -1044,6 +1202,26 @@
         currentViewingRecipe = recipe;
 
         document.getElementById('view-title').textContent = recipe.title;
+
+        // Show/hide edit and delete buttons based on permissions
+        const editBtn = document.getElementById('btn-edit-recipe');
+        const deleteBtn = document.getElementById('btn-delete-recipe');
+        const folderBtn = document.getElementById('btn-add-to-folder');
+
+        if (editBtn) editBtn.style.display = isIvy ? '' : 'none';
+        if (deleteBtn) deleteBtn.style.display = isIvy ? '' : 'none';
+        if (folderBtn) folderBtn.style.display = isIvy ? '' : 'none';
+
+        // Show suggested by info if it's a suggestion
+        const suggestionInfo = document.getElementById('view-suggestion-info');
+        if (suggestionInfo) {
+            if (recipe.suggestedBy) {
+                suggestionInfo.textContent = `Suggested by: ${recipe.suggestedBy}`;
+                suggestionInfo.hidden = false;
+            } else {
+                suggestionInfo.hidden = true;
+            }
+        }
 
         const viewImage = document.getElementById('view-image');
         if (recipe.image) {
@@ -1171,18 +1349,50 @@
             photos: photos
         };
 
-        if (id) {
-            updateRecipe(id, recipe);
-            showToast('Recipe updated!');
-        } else {
-            addRecipe(recipe);
-            showToast('Recipe saved!');
+        // Check if recipe title is empty
+        if (!recipe.title.trim()) {
+            showToast('Please enter a recipe title');
+            document.getElementById('recipe-title').focus();
+            return;
         }
 
-        closeModal(elements.modalRecipe);
-        renderRecipes();
-        renderTagsFilter();
-        renderFolders();
+        // Handle non-Ivy user suggestions
+        if (!isIvy && !id) {
+            const suggesterName = document.getElementById('suggester-name')?.value?.trim() || 'Anonymous';
+            recipe.suggestedBy = suggesterName;
+            recipe.isSuggestion = true;
+
+            // Add to suggested recipes folder
+            const suggestedFolder = getOrCreateSuggestedFolder();
+            recipe.folders = [suggestedFolder.id];
+        }
+
+        try {
+            if (id) {
+                updateRecipe(id, recipe);
+                showToast('Recipe updated!');
+            } else {
+                const savedRecipe = addRecipe(recipe);
+                if (savedRecipe) {
+                    if (!isIvy) {
+                        showToast('Recipe suggested! Ivy will review it.');
+                    } else {
+                        showToast('Recipe saved!');
+                    }
+                } else {
+                    showToast('Error: Could not save recipe. Storage may be full.');
+                    return;
+                }
+            }
+
+            closeModal(elements.modalRecipe);
+            renderRecipes();
+            renderTagsFilter();
+            renderFolders();
+        } catch (error) {
+            console.error('Error saving recipe:', error);
+            showToast('Error saving recipe. Try using smaller images.');
+        }
     }
 
     async function handleFetchUrl() {
@@ -1636,6 +1846,7 @@
         const params = new URLSearchParams(window.location.search);
         let url = params.get('url');
         const text = params.get('text');
+        const action = params.get('action');
 
         if (!url && text) {
             const urlMatch = text.match(/https?:\/\/[^\s]+/);
@@ -1649,6 +1860,14 @@
             openAddModal(true);
             elements.recipeUrl.value = url;
             handleFetchUrl();
+        } else if (action === 'add') {
+            window.history.replaceState({}, '', window.location.pathname);
+            // Wait for auth check before opening modal
+            setTimeout(() => {
+                if (checkAuth()) {
+                    openAddModal(true);
+                }
+            }, 100);
         }
     }
 
@@ -1754,14 +1973,59 @@
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            // Compress image before storing
+            compressImage(file, 1200, 0.8).then(compressedDataUrl => {
                 selectedPhotos.push({
                     file: file,
-                    dataUrl: e.target.result
+                    dataUrl: compressedDataUrl
                 });
                 updatePhotoPreviewDisplay();
+            }).catch(err => {
+                console.error('Error compressing image:', err);
+                // Fallback to regular reading
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    selectedPhotos.push({
+                        file: file,
+                        dataUrl: e.target.result
+                    });
+                    updatePhotoPreviewDisplay();
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+    }
+
+    function compressImage(file, maxWidth, quality) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Scale down if too large
+                    if (width > maxWidth) {
+                        height = (height * maxWidth) / width;
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convert to JPEG for better compression
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedDataUrl);
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
             };
+            reader.onerror = reject;
             reader.readAsDataURL(file);
         });
     }
@@ -1799,7 +2063,13 @@
         // Add "Cookbook" tag
         document.getElementById('recipe-tags').value = 'Cookbook';
 
-        showToast(`${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} added! Fill in the recipe details.`);
+        // If non-Ivy user, show the suggester name field
+        if (!isIvy) {
+            const suggesterSection = document.getElementById('suggester-section');
+            if (suggesterSection) suggesterSection.hidden = false;
+        }
+
+        showToast(`${selectedPhotos.length} photo${selectedPhotos.length > 1 ? 's' : ''} added! Enter a title and save.`);
     }
 
     // ============================================
@@ -2245,17 +2515,297 @@
     }
 
     // ============================================
+    // Auth Overlay
+    // ============================================
+
+    function showAuthOverlay() {
+        const overlay = document.getElementById('auth-overlay');
+        if (overlay) {
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function hideAuthOverlay() {
+        const overlay = document.getElementById('auth-overlay');
+        if (overlay) {
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+        }
+    }
+
+    function setupAuthOverlay() {
+        const overlay = document.getElementById('auth-overlay');
+        if (!overlay) return;
+
+        const yesBtn = document.getElementById('auth-yes');
+        const noBtn = document.getElementById('auth-no');
+        const passwordSection = document.getElementById('auth-password-section');
+        const questionSection = document.getElementById('auth-question-section');
+        const notIvySection = document.getElementById('auth-not-ivy-section');
+        const passwordInput = document.getElementById('auth-password');
+        const submitPasswordBtn = document.getElementById('auth-submit-password');
+        const continueBtn = document.getElementById('auth-continue');
+        const passwordError = document.getElementById('auth-password-error');
+
+        if (yesBtn) {
+            yesBtn.addEventListener('click', () => {
+                questionSection.hidden = true;
+                passwordSection.hidden = false;
+                passwordInput.focus();
+            });
+        }
+
+        if (noBtn) {
+            noBtn.addEventListener('click', () => {
+                questionSection.hidden = true;
+                notIvySection.hidden = false;
+            });
+        }
+
+        if (submitPasswordBtn) {
+            submitPasswordBtn.addEventListener('click', () => {
+                const password = passwordInput.value;
+                if (password === IVY_PASSWORD) {
+                    setAuth(true);
+                    hideAuthOverlay();
+                    updateUIForAuth();
+                    renderFolders();
+                    showToast('Welcome back, Ivy!');
+                } else {
+                    passwordError.hidden = false;
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            });
+        }
+
+        if (passwordInput) {
+            passwordInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    submitPasswordBtn.click();
+                }
+            });
+        }
+
+        if (continueBtn) {
+            continueBtn.addEventListener('click', () => {
+                setAuth(false);
+                hideAuthOverlay();
+                updateUIForAuth();
+                renderFolders();
+                showToast('Welcome! You can browse and suggest recipes.');
+            });
+        }
+    }
+
+    function updateUIForAuth() {
+        // Update UI based on whether user is Ivy or not
+        const addRecipeBtn = document.getElementById('btn-add-recipe');
+        const addFolderBtn = document.getElementById('btn-add-folder');
+
+        if (!isIvy) {
+            // Change "Add Recipe" to "Suggest Recipe" for non-Ivy users
+            if (addRecipeBtn) {
+                addRecipeBtn.innerHTML = `
+                    + Suggest Recipe
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                `;
+            }
+            // Hide add folder button for non-Ivy users
+            if (addFolderBtn) {
+                addFolderBtn.style.display = 'none';
+            }
+        } else {
+            if (addRecipeBtn) {
+                addRecipeBtn.innerHTML = `
+                    + Add Recipe
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                `;
+            }
+            if (addFolderBtn) {
+                addFolderBtn.style.display = '';
+            }
+        }
+
+        // Re-render recipes to update action buttons
+        renderRecipes();
+    }
+
+    // ============================================
+    // Collapsible Sections
+    // ============================================
+
+    let collapsedSections = JSON.parse(localStorage.getItem('ivys_collapsed_sections') || '{}');
+
+    function setupCollapsibleSections() {
+        const foldersLabel = document.querySelector('#folders-section .sidebar-section-label');
+        const categoriesLabel = document.querySelector('#categories-section .sidebar-section-label');
+
+        if (foldersLabel) {
+            foldersLabel.classList.add('collapsible-header');
+            foldersLabel.innerHTML = `
+                <span>Folders</span>
+                <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            `;
+            foldersLabel.addEventListener('click', () => toggleSection('folders'));
+            if (collapsedSections.folders) {
+                document.getElementById('folders-section').classList.add('collapsed');
+            }
+        }
+
+        if (categoriesLabel) {
+            categoriesLabel.classList.add('collapsible-header');
+            categoriesLabel.innerHTML = `
+                <span>Categories</span>
+                <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            `;
+            categoriesLabel.addEventListener('click', () => toggleSection('categories'));
+            if (collapsedSections.categories) {
+                document.getElementById('categories-section').classList.add('collapsed');
+            }
+        }
+    }
+
+    function toggleSection(sectionName) {
+        const section = document.getElementById(`${sectionName}-section`);
+        if (section) {
+            section.classList.toggle('collapsed');
+            collapsedSections[sectionName] = section.classList.contains('collapsed');
+            localStorage.setItem('ivys_collapsed_sections', JSON.stringify(collapsedSections));
+        }
+    }
+
+    // ============================================
+    // Handle Shared Files (Web Share Target)
+    // ============================================
+
+    function handleSharedFiles() {
+        // Check if this is a share target request
+        const params = new URLSearchParams(window.location.search);
+        const shareAction = params.get('share');
+        const received = params.get('received');
+
+        // Listen for messages from service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'SHARED_FILES') {
+                    const files = event.data.files;
+                    if (files && files.length > 0) {
+                        // Add files to selected photos
+                        files.forEach(file => {
+                            selectedPhotos.push({
+                                file: null,
+                                dataUrl: file.dataUrl
+                            });
+                        });
+                        updatePhotoPreviewDisplay();
+                        openPhotoImportModal();
+                        showToast(`${files.length} photo(s) received! Add recipe details.`);
+                    }
+                }
+            });
+        }
+
+        // Check for pending shared files in cache
+        if (shareAction === 'photos' && received === 'true') {
+            checkPendingShares();
+            // Clean up URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+
+        // Also support launchQueue for browsers that support it
+        if (shareAction === 'photos' && 'launchQueue' in window) {
+            window.launchQueue.setConsumer(async (launchParams) => {
+                if (launchParams.files && launchParams.files.length > 0) {
+                    const fileHandles = launchParams.files;
+                    for (const handle of fileHandles) {
+                        const file = await handle.getFile();
+                        if (file.type.startsWith('image/')) {
+                            const dataUrl = await fileToDataUrl(file);
+                            selectedPhotos.push({
+                                file: file,
+                                dataUrl: dataUrl
+                            });
+                        }
+                    }
+                    if (selectedPhotos.length > 0) {
+                        updatePhotoPreviewDisplay();
+                        openPhotoImportModal();
+                        showToast(`${selectedPhotos.length} photo(s) received! Review and continue.`);
+                    }
+                }
+            });
+        }
+    }
+
+    async function checkPendingShares() {
+        try {
+            const cache = await caches.open('shared-files-temp');
+            const response = await cache.match('pending-shares');
+            if (response) {
+                const files = await response.json();
+                if (files && files.length > 0) {
+                    files.forEach(file => {
+                        selectedPhotos.push({
+                            file: null,
+                            dataUrl: file.dataUrl
+                        });
+                    });
+                    updatePhotoPreviewDisplay();
+                    openPhotoImportModal();
+                    showToast(`${files.length} photo(s) received! Add recipe details.`);
+                }
+                // Clear the pending shares
+                await cache.delete('pending-shares');
+            }
+        } catch (e) {
+            console.error('Error checking pending shares:', e);
+        }
+    }
+
+    function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // ============================================
     // Initialize
     // ============================================
 
     function init() {
+        // Check auth status first
+        const hasAuthed = checkAuth();
+
         renderRecipes();
         renderTagsFilter();
         renderFolders();
         setupEventListeners();
         setupBookmarklet();
+        setupAuthOverlay();
+        setupCollapsibleSections();
         checkUrlParams();
+        handleSharedFiles();
         registerServiceWorker();
+
+        // Show auth overlay if never authed before
+        if (!hasAuthed) {
+            showAuthOverlay();
+        } else {
+            updateUIForAuth();
+        }
     }
 
     // Start the app

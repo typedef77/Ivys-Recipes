@@ -5,15 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Ivy's Recipes - Save, organize, and find your favorite recipes">
     <meta name="theme-color" content="#7b9971">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Ivy's Recipes">
     <title>Ivy's Recipes</title>
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Pacifico&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="auth-overlay" hidden>
+        <div class="auth-content">
+            <div class="auth-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+            </div>
+            <h1 class="auth-title">Ivy's Recipes</h1>
+
+            <div id="auth-question-section" class="auth-section">
+                <p class="auth-question">Are you Ivy?</p>
+                <div class="auth-buttons">
+                    <button id="auth-yes" class="btn btn-primary">Yes, I'm Ivy!</button>
+                    <button id="auth-no" class="btn btn-secondary">Nope, just visiting</button>
+                </div>
+            </div>
+
+            <div id="auth-password-section" class="auth-section" hidden>
+                <p class="auth-question">Enter your password:</p>
+                <div class="auth-password-form">
+                    <input type="password" id="auth-password" class="auth-password-input" placeholder="Password...">
+                    <button id="auth-submit-password" class="btn btn-primary">Enter</button>
+                </div>
+                <p id="auth-password-error" class="auth-error" hidden>That's not right. Try again!</p>
+            </div>
+
+            <div id="auth-not-ivy-section" class="auth-section" hidden>
+                <p class="auth-message">That's okay! You can still browse all the recipes and suggest new ones for Ivy to review.</p>
+                <button id="auth-continue" class="btn btn-primary">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         <!-- Header with Ivy Banner -->
         <header class="header">
@@ -335,6 +372,11 @@
                             <input type="text" id="recipe-source" placeholder="e.g., NYT Cooking, Smitten Kitchen, cookbook name, or URL">
                         </div>
 
+                        <div class="form-group" id="suggester-section" hidden>
+                            <label for="suggester-name">Your Name (optional)</label>
+                            <input type="text" id="suggester-name" placeholder="So Ivy knows who suggested this!">
+                        </div>
+
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
                             <button type="submit" class="btn btn-primary">Save Recipe</button>
@@ -392,6 +434,7 @@
                     </div>
                 </div>
                 <div class="modal-body">
+                    <p id="view-suggestion-info" class="view-suggestion-info" hidden></p>
                     <div id="view-image" class="view-image" hidden></div>
 
                     <!-- Recipe Photos Gallery -->
