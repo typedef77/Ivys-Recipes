@@ -2432,8 +2432,8 @@
         elements.imagePreview.style.backgroundImage = `url(${photoUrls[0]})`;
         elements.imagePreview.hidden = false;
 
-        // Store all photos
-        document.getElementById('recipe-photos').value = JSON.stringify(photoUrls);
+        // Store all photos (store full objects for proper cloud upload)
+        document.getElementById('recipe-photos').value = JSON.stringify(selectedPhotos);
 
         // Show recipe photos preview
         elements.recipePhotosSection.hidden = false;
