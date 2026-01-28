@@ -349,7 +349,7 @@
             if (!recipe.folders) recipe.folders = [];
             if (!recipe.folders.includes(folderId)) {
                 recipe.folders.push(folderId);
-                saveRecipes(recipes);
+                saveRecipes(recipes, 'Added to folder');
             }
         }
     }
@@ -359,19 +359,23 @@
         const recipe = recipes.find(r => r.id === recipeId);
         if (recipe && recipe.folders) {
             recipe.folders = recipe.folders.filter(f => f !== folderId);
-            saveRecipes(recipes);
+            saveRecipes(recipes, 'Removed from folder');
         }
     }
 
-    async function saveRecipes(recipes) {
+    async function saveRecipes(recipes, successMessage = null) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
             // Also save to cloud and wait for completion
             lastSyncTime = Date.now();
             const cloudSaveSuccess = await saveToCloud(recipes);
-            if (!cloudSaveSuccess && useCloud) {
+            if (cloudSaveSuccess && successMessage) {
+                showToast(successMessage + ' and synced to cloud!');
+            } else if (!cloudSaveSuccess && useCloud) {
                 console.warn('Cloud save failed, data only saved locally');
-                showToast('Warning: Changes saved locally only');
+                showToast(successMessage ? successMessage + ' (saved locally only)' : 'Warning: Changes saved locally only');
+            } else if (successMessage) {
+                showToast(successMessage);
             }
         } catch (e) {
             console.error('Error saving recipes:', e);
@@ -387,7 +391,7 @@
     // Recipe CRUD Operations
     // ============================================
 
-    function addRecipe(recipe) {
+    function addRecipe(recipe, showSyncToast = true) {
         try {
             const recipes = getRecipes();
             recipe.id = generateId();
@@ -396,7 +400,7 @@
             recipes.unshift(recipe);
 
             // Try to save - this may fail if localStorage is full
-            const saveResult = saveRecipesWithCheck(recipes);
+            const saveResult = saveRecipesWithCheck(recipes, showSyncToast);
             if (!saveResult) {
                 return null;
             }
@@ -407,15 +411,20 @@
         }
     }
 
-    function saveRecipesWithCheck(recipes) {
+    function saveRecipesWithCheck(recipes, showSyncToast = false) {
         try {
             const data = JSON.stringify(recipes);
             localStorage.setItem(STORAGE_KEY, data);
             // Also sync to cloud after successful local save
             lastSyncTime = Date.now();
             saveToCloud(recipes).then(success => {
-                if (!success && useCloud) {
+                if (success && showSyncToast) {
+                    showToast('Recipe added and synced to cloud!');
+                } else if (!success && useCloud) {
                     console.warn('Cloud sync failed after adding recipe');
+                    if (showSyncToast) {
+                        showToast('Recipe added locally (cloud sync failed)');
+                    }
                 }
             });
             return true;
@@ -433,7 +442,7 @@
         const index = recipes.findIndex(r => r.id === id);
         if (index !== -1) {
             recipes[index] = { ...recipes[index], ...updates, updatedAt: new Date().toISOString() };
-            saveRecipes(recipes);
+            saveRecipes(recipes, 'Recipe updated');
             return recipes[index];
         }
         return null;
@@ -464,7 +473,7 @@
         }
 
         const filtered = recipes.filter(r => r.id !== id);
-        saveRecipes(filtered);
+        saveRecipes(filtered, 'Recipe deleted');
     }
 
     function getRecipeById(id) {
@@ -1756,15 +1765,14 @@
 
             if (id) {
                 updateRecipe(id, recipe);
-                showToast('Recipe updated!');
+                // Toast will be shown by saveRecipes after cloud sync
             } else {
-                const savedRecipe = addRecipe(recipe);
+                const savedRecipe = addRecipe(recipe, true);
                 if (savedRecipe) {
                     if (!isIvy) {
                         showToast('Recipe suggested! Ivy will review it.');
-                    } else {
-                        showToast('Recipe saved!');
                     }
+                    // For Ivy, toast will be shown after cloud sync completes
                 } else {
                     showToast('Error: Could not save recipe. Storage may be full.');
                     if (saveBtn) {
