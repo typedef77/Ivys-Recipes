@@ -1684,40 +1684,66 @@
             const recipeId = id || generateId();
 
             // Upload photos to Firebase Storage if available
-            if (recipe.photos && recipe.photos.length > 0 && useCloud && storage) {
-                showToast('Uploading photos to cloud...');
+            if (recipe.photos && recipe.photos.length > 0) {
+                if (useCloud && storage) {
+                    showToast('Uploading photos to cloud...');
 
-                // Upload each photo sequentially for better error handling
-                const uploadedPhotos = [];
-                for (let index = 0; index < recipe.photos.length; index++) {
-                    const photo = recipe.photos[index];
-                    if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                        const photoId = `photo-${index}-${Date.now()}`;
-                        try {
-                            const url = await uploadPhotoToStorage(photo.dataUrl, recipeId, photoId);
-                            uploadedPhotos.push({
-                                ...photo,
-                                dataUrl: url,
-                                storageUrl: url
-                            });
-                        } catch (uploadError) {
-                            console.warn('Photo upload failed, keeping local:', uploadError);
+                    // Upload each photo sequentially for better error handling
+                    const uploadedPhotos = [];
+                    for (let index = 0; index < recipe.photos.length; index++) {
+                        const photo = recipe.photos[index];
+                        if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
+                            const photoId = `photo-${index}-${Date.now()}`;
+                            try {
+                                const url = await uploadPhotoToStorage(photo.dataUrl, recipeId, photoId);
+                                // Only keep the storage URL, remove base64 data to save localStorage space
+                                if (url && !url.startsWith('data:')) {
+                                    uploadedPhotos.push({
+                                        dataUrl: url,
+                                        storageUrl: url
+                                    });
+                                } else {
+                                    // Upload returned base64 (failed), skip this photo for localStorage
+                                    console.warn('Photo upload returned base64, skipping for storage');
+                                    uploadedPhotos.push({ dataUrl: url, storageUrl: url });
+                                }
+                            } catch (uploadError) {
+                                console.warn('Photo upload failed:', uploadError);
+                                // Skip failed photos to avoid localStorage quota issues
+                                showToast('Some photos could not be uploaded');
+                            }
+                        } else {
                             uploadedPhotos.push(photo);
                         }
-                    } else {
-                        uploadedPhotos.push(photo);
                     }
+                    recipe.photos = uploadedPhotos;
+                } else {
+                    // No cloud storage - warn user about potential storage issues
+                    console.warn('Cloud storage not available, cookbook photos may not save properly');
+                    showToast('Cloud storage not available. Photos may not save.');
+                    // Clear photos to avoid localStorage quota issues
+                    recipe.photos = [];
                 }
-                recipe.photos = uploadedPhotos;
             }
 
             // Upload cover image to Firebase Storage if it's a data URL
-            if (recipe.image && recipe.image.startsWith('data:') && useCloud && storage) {
-                try {
-                    const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
-                    recipe.image = coverImageUrl;
-                } catch (coverError) {
-                    console.warn('Cover image upload failed, keeping local:', coverError);
+            if (recipe.image && recipe.image.startsWith('data:')) {
+                if (useCloud && storage) {
+                    try {
+                        const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
+                        if (coverImageUrl && !coverImageUrl.startsWith('data:')) {
+                            recipe.image = coverImageUrl;
+                        } else {
+                            // Upload failed, clear the image to avoid localStorage issues
+                            recipe.image = '';
+                        }
+                    } catch (coverError) {
+                        console.warn('Cover image upload failed:', coverError);
+                        recipe.image = '';
+                    }
+                } else {
+                    // No cloud storage, clear large base64 image
+                    recipe.image = '';
                 }
             }
 
@@ -2466,8 +2492,8 @@
      */
     async function uploadPhotoToStorage(dataUrl, recipeId, photoId) {
         if (!useCloud || !storage) {
-            console.warn('Firebase Storage not available, keeping photo in localStorage');
-            return dataUrl; // Return original dataUrl as fallback
+            console.warn('Firebase Storage not available');
+            throw new Error('Cloud storage not available');
         }
 
         try {
@@ -2488,7 +2514,7 @@
             const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.${extension}`);
 
             // Upload with timeout to prevent hanging
-            const UPLOAD_TIMEOUT = 30000; // 30 seconds
+            const UPLOAD_TIMEOUT = 15000; // 15 seconds per photo
             const uploadPromise = new Promise(async (resolve, reject) => {
                 const timeoutId = setTimeout(() => {
                     reject(new Error('Upload timed out'));
@@ -2515,8 +2541,8 @@
             return downloadURL;
         } catch (error) {
             console.error('Error uploading photo to Firebase Storage:', error);
-            // Return original dataUrl as fallback
-            return dataUrl;
+            // Throw error instead of returning base64 to prevent localStorage overflow
+            throw error;
         }
     }
 
@@ -2664,13 +2690,14 @@
         const header = document.querySelector('.header');
 
         if (show) {
-            // Position the search bar below the header
-            if (header && window.innerWidth <= 768) {
+            // Position the search bar below the header on mobile
+            if (header && window.innerWidth <= 1024) {
                 const headerRect = header.getBoundingClientRect();
                 searchContainer.style.top = headerRect.bottom + 'px';
             }
             searchContainer.classList.add('expanded');
-            searchInput.focus();
+            // Small delay to ensure the element is visible before focusing
+            setTimeout(() => searchInput.focus(), 50);
         } else {
             searchContainer.classList.remove('expanded');
             // Clear search when closing on mobile
