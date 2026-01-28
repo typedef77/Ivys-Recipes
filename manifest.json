@@ -67,19 +67,12 @@
     ],
     "categories": ["food", "lifestyle", "utilities"],
     "share_target": {
-        "action": "./?share=photos",
-        "method": "POST",
-        "enctype": "multipart/form-data",
+        "action": "./?share=url",
+        "method": "GET",
         "params": {
             "title": "title",
             "text": "text",
-            "url": "url",
-            "files": [
-                {
-                    "name": "photos",
-                    "accept": ["image/*", ".jpg", ".jpeg", ".png", ".webp", ".gif"]
-                }
-            ]
+            "url": "url"
         }
     },
     "shortcuts": [

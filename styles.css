@@ -185,9 +185,9 @@ h1, h2, h3, h4 {
 }
 
 .logo {
-    font-family: 'Pacifico', cursive;
+    font-family: 'Playfair Display', Georgia, serif;
     font-size: 1.5rem;
-    font-weight: 400;
+    font-weight: 600;
     color: white;
     text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     margin: 0;
@@ -1571,19 +1571,20 @@ h1, h2, h3, h4 {
         display: none;
     }
 
-    /* Mobile search - collapsed by default */
+    /* Mobile search - floating bar below header */
     .header-search {
-        position: absolute;
+        position: fixed;
         left: 0;
         right: 0;
-        top: 0;
-        bottom: 0;
+        top: auto;
         background: var(--color-surface);
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1rem;
         display: none;
         align-items: center;
         gap: 0.5rem;
-        z-index: 10;
+        z-index: 100;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-bottom: 1px solid var(--color-border);
     }
 
     .header-search.expanded {
@@ -1593,6 +1594,7 @@ h1, h2, h3, h4 {
     .header-search-input {
         font-size: 16px; /* Prevent iOS zoom */
         flex: 1;
+        min-width: 0;
     }
 
     .search-close-btn {
@@ -1830,11 +1832,13 @@ h1, h2, h3, h4 {
 .auth-content {
     background: white;
     border-radius: var(--radius-lg);
-    padding: 2.5rem;
+    padding: 2rem;
     max-width: 400px;
-    width: 100%;
+    width: calc(100% - 2rem);
     text-align: center;
     box-shadow: var(--shadow-lg);
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .auth-icon {
@@ -1843,8 +1847,9 @@ h1, h2, h3, h4 {
 }
 
 .auth-title {
-    font-family: 'Pacifico', cursive;
+    font-family: 'Playfair Display', Georgia, serif;
     font-size: 2rem;
+    font-weight: 600;
     color: var(--color-accent);
     margin-bottom: 2rem;
 }
@@ -1854,15 +1859,17 @@ h1, h2, h3, h4 {
 }
 
 .auth-question {
-    font-family: 'Pacifico', cursive;
+    font-family: 'Playfair Display', Georgia, serif;
     font-size: 1.25rem;
+    font-weight: 600;
     color: var(--color-secondary);
     margin-bottom: 1.5rem;
 }
 
 .auth-message {
-    font-family: 'Pacifico', cursive;
+    font-family: 'Playfair Display', Georgia, serif;
     font-size: 1rem;
+    font-weight: 400;
     color: var(--color-text-light);
     margin-bottom: 1.5rem;
     line-height: 1.6;
@@ -1881,17 +1888,23 @@ h1, h2, h3, h4 {
 
 .auth-password-form {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .auth-password-input {
     flex: 1;
+    min-width: 0;
     padding: 0.75rem 1rem;
-    font-size: 1rem;
+    font-size: 16px; /* Prevent iOS zoom */
     border: 1.5px solid var(--color-border);
     border-radius: var(--radius-md);
     font-family: inherit;
+    box-sizing: border-box;
 }
 
 .auth-password-input:focus {
