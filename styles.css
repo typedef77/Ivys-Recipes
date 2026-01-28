@@ -185,9 +185,9 @@ h1, h2, h3, h4 {
 }
 
 .logo {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Pacifico', cursive;
     font-size: 1.5rem;
-    font-weight: 600;
+    font-weight: 400;
     color: white;
     text-shadow: 0 1px 2px rgba(0,0,0,0.15);
     margin: 0;
@@ -237,6 +237,16 @@ h1, h2, h3, h4 {
     outline: none;
     border-color: var(--color-primary);
     background-color: white;
+}
+
+/* Search close button - hidden on desktop */
+.search-close-btn {
+    display: none;
+}
+
+/* Search toggle button - hidden on desktop */
+.search-toggle-btn {
+    display: none;
 }
 
 /* Header Actions - Right Side */
@@ -1561,13 +1571,37 @@ h1, h2, h3, h4 {
         display: none;
     }
 
+    /* Mobile search - collapsed by default */
     .header-search {
-        max-width: none;
-        flex: 1;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        background: var(--color-surface);
+        padding: 0.5rem 1rem;
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        z-index: 10;
+    }
+
+    .header-search.expanded {
+        display: flex;
     }
 
     .header-search-input {
         font-size: 16px; /* Prevent iOS zoom */
+        flex: 1;
+    }
+
+    .search-close-btn {
+        display: flex;
+        flex-shrink: 0;
+    }
+
+    .search-toggle-btn {
+        display: flex;
     }
 
     .main-content {
@@ -1611,6 +1645,141 @@ h1, h2, h3, h4 {
     .header-actions .btn-primary span {
         display: none;
     }
+}
+
+/* Suggestions Review Modal */
+.suggestions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+.suggestion-card {
+    background: white;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+}
+
+.suggestion-card-image {
+    height: 160px;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--color-cream);
+    position: relative;
+}
+
+.suggestion-card-placeholder {
+    height: 160px;
+    background: linear-gradient(135deg, var(--color-cream) 0%, #e8e0d5 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-light);
+}
+
+.suggestion-card-body {
+    padding: 1rem;
+}
+
+.suggestion-card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+}
+
+.suggestion-card-meta {
+    font-size: 0.875rem;
+    color: var(--color-text-light);
+    margin-bottom: 1rem;
+}
+
+.suggestion-card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.suggestion-card-actions .btn {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.btn-approve {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-approve:hover {
+    background-color: var(--color-primary-dark);
+}
+
+.btn-dismiss {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.btn-dismiss:hover {
+    background-color: var(--color-cream);
+}
+
+.view-suggestion-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--color-cream);
+    border-radius: var(--radius-md);
+}
+
+.view-suggestion-actions .btn {
+    flex: 1;
+}
+
+.modal-large .modal-content {
+    max-width: 900px;
+}
+
+/* Install Instructions Modal */
+.install-instructions {
+    padding: 1rem 0;
+}
+
+.install-step {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.install-steps-list {
+    text-align: left;
+    padding-left: 1.5rem;
+    margin: 1rem 0;
+}
+
+.install-steps-list li {
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.install-note {
+    font-size: 0.875rem;
+    color: var(--color-text-light);
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--color-cream);
+    border-radius: var(--radius-sm);
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border);
 }
 
 /* Print Styles */
@@ -1685,12 +1854,14 @@ h1, h2, h3, h4 {
 }
 
 .auth-question {
+    font-family: 'Pacifico', cursive;
     font-size: 1.25rem;
     color: var(--color-secondary);
     margin-bottom: 1.5rem;
 }
 
 .auth-message {
+    font-family: 'Pacifico', cursive;
     font-size: 1rem;
     color: var(--color-text-light);
     margin-bottom: 1.5rem;
