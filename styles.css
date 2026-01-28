@@ -474,8 +474,7 @@ h1, h2, h3, h4 {
 }
 
 .sidebar-tags {
-    max-height: 300px;
-    overflow-y: auto;
+    /* More/Less button controls visibility - no height limit needed */
 }
 
 /* Main Content */
