@@ -1637,6 +1637,25 @@ h1, h2, h3, h4 {
         color: var(--color-text-muted);
     }
 
+    .mobile-search-input-wrapper {
+        display: flex;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .mobile-search-input-wrapper .mobile-search-input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mobile-search-submit {
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
     .mobile-search-backdrop {
         display: none;
         position: fixed;
@@ -1996,15 +2015,21 @@ h1, h2, h3, h4 {
     display: none;
 }
 
-/* More button styling */
-.sidebar-item-more {
-    color: var(--color-accent);
+/* See All / See Less toggle button styling */
+.sidebar-item-more,
+.sidebar-item-toggle {
+    color: var(--color-primary);
     font-size: 0.875rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
 }
 
-.sidebar-item-more:hover {
-    color: var(--color-accent-dark);
-    background-color: var(--color-accent-light);
+.sidebar-item-more:hover,
+.sidebar-item-toggle:hover {
+    color: var(--color-primary-dark);
+    background-color: var(--color-primary-light);
 }
 
 /* Suggested folder styling */

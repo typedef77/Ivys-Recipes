@@ -1247,20 +1247,20 @@
         if (hasMore) {
             if (showAllCategories) {
                 html += `
-                    <button class="sidebar-item sidebar-item-more" id="btn-toggle-categories">
+                    <button class="sidebar-item sidebar-item-toggle" id="btn-toggle-categories">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="18 15 12 9 6 15"></polyline>
                         </svg>
-                        Show Less
+                        See Less
                     </button>
                 `;
             } else {
                 html += `
-                    <button class="sidebar-item sidebar-item-more" id="btn-toggle-categories">
+                    <button class="sidebar-item sidebar-item-toggle" id="btn-toggle-categories">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
-                        More (${tags.length - 8})
+                        See All (${tags.length - 8} more)
                     </button>
                 `;
             }
@@ -2699,7 +2699,7 @@
     // Mobile Search Toggle
     // ============================================
 
-    function toggleMobileSearch(show) {
+    function toggleMobileSearch(show, keepSearch = false) {
         const popup = document.getElementById('mobile-search-popup');
         const backdrop = document.getElementById('mobile-search-backdrop');
         const mobileInput = document.getElementById('mobile-search-input');
@@ -2710,15 +2710,15 @@
             backdrop.classList.add('visible');
             // Sync with header search value
             if (headerInput && mobileInput) {
-                mobileInput.value = headerInput.value || '';
+                mobileInput.value = headerInput.value || currentSearch || '';
             }
             // Focus with delay to ensure element is visible
             setTimeout(() => mobileInput.focus(), 50);
         } else {
             popup.classList.remove('visible');
             backdrop.classList.remove('visible');
-            // Clear search when closing
-            if (mobileInput && mobileInput.value) {
+            // Only clear search if not keeping it
+            if (!keepSearch && mobileInput && mobileInput.value) {
                 mobileInput.value = '';
                 if (headerInput) headerInput.value = '';
                 currentSearch = '';
@@ -2861,6 +2861,20 @@
                 const headerInput = document.getElementById('header-search');
                 if (headerInput) headerInput.value = e.target.value;
                 renderRecipes();
+            });
+            // Handle Enter key - close popup but keep search results
+            mobileSearchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    toggleMobileSearch(false, true); // keepSearch = true
+                }
+            });
+        }
+        // Mobile search submit button
+        const mobileSearchSubmit = document.getElementById('mobile-search-submit');
+        if (mobileSearchSubmit) {
+            mobileSearchSubmit.addEventListener('click', () => {
+                toggleMobileSearch(false, true); // keepSearch = true
             });
         }
 
