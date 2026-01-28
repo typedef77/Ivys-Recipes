@@ -862,6 +862,23 @@
 
         filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
+        // Get the suggested folder ID
+        const suggestedFolder = getFolders().find(f => f.name === SUGGESTED_FOLDER_NAME);
+        const suggestedFolderId = suggestedFolder ? suggestedFolder.id : null;
+        const isViewingSuggestions = currentFilter === `folder:${suggestedFolderId}`;
+
+        // For Ivy, exclude suggested recipes from "all", "recent", "favorites" views
+        // (They should only appear in the Suggested Recipes folder or when explicitly viewing it)
+        if (isIvy && suggestedFolderId && !isViewingSuggestions) {
+            filtered = filtered.filter(r => {
+                // Exclude if the recipe is in the suggested folder AND is still marked as a suggestion
+                if (r.isSuggestion && r.folders && r.folders.includes(suggestedFolderId)) {
+                    return false;
+                }
+                return true;
+            });
+        }
+
         if (currentFilter === 'recent') {
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -1473,12 +1490,23 @@
 
         // Show suggested by info if it's a suggestion
         const suggestionInfo = document.getElementById('view-suggestion-info');
+        const suggestionActions = document.getElementById('view-suggestion-actions');
+
         if (suggestionInfo) {
             if (recipe.suggestedBy) {
                 suggestionInfo.textContent = `Suggested by: ${recipe.suggestedBy}`;
                 suggestionInfo.hidden = false;
             } else {
                 suggestionInfo.hidden = true;
+            }
+        }
+
+        // Show approve/dismiss buttons for suggestions (Ivy only)
+        if (suggestionActions) {
+            if (isIvy && recipe.isSuggestion) {
+                suggestionActions.hidden = false;
+            } else {
+                suggestionActions.hidden = true;
             }
         }
 
@@ -1494,9 +1522,11 @@
         const photos = recipe.photos || [];
         if (photos.length > 0) {
             elements.viewPhotosSection.hidden = false;
-            elements.viewPhotosGallery.innerHTML = photos.map((p, i) =>
-                `<div class="view-photo-item" data-index="${i}"><img src="${p}" alt="Recipe photo ${i + 1}"></div>`
-            ).join('');
+            // Photos may be objects with dataUrl property or plain URLs (for backward compatibility)
+            elements.viewPhotosGallery.innerHTML = photos.map((p, i) => {
+                const photoUrl = typeof p === 'object' ? (p.dataUrl || p.storageUrl) : p;
+                return `<div class="view-photo-item" data-index="${i}"><img src="${photoUrl}" alt="Recipe photo ${i + 1}"></div>`;
+            }).join('');
         } else {
             elements.viewPhotosSection.hidden = true;
         }
@@ -1626,36 +1656,52 @@
             recipe.folders = [suggestedFolder.id];
         }
 
+        // Disable save button to prevent double submission
+        const saveBtn = document.querySelector('#modal-recipe .btn-primary');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+
         try {
+            const recipeId = id || generateId();
+
             // Upload photos to Firebase Storage if available
             if (recipe.photos && recipe.photos.length > 0 && useCloud && storage) {
                 showToast('Uploading photos to cloud...');
-                const recipeId = id || generateId();
 
-                // Upload each photo
-                const uploadedPhotos = await Promise.all(
-                    recipe.photos.map(async (photo, index) => {
-                        if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                            const photoId = `photo-${index}-${Date.now()}`;
+                // Upload each photo sequentially for better error handling
+                const uploadedPhotos = [];
+                for (let index = 0; index < recipe.photos.length; index++) {
+                    const photo = recipe.photos[index];
+                    if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
+                        const photoId = `photo-${index}-${Date.now()}`;
+                        try {
                             const url = await uploadPhotoToStorage(photo.dataUrl, recipeId, photoId);
-                            return {
+                            uploadedPhotos.push({
                                 ...photo,
                                 dataUrl: url,
                                 storageUrl: url
-                            };
+                            });
+                        } catch (uploadError) {
+                            console.warn('Photo upload failed, keeping local:', uploadError);
+                            uploadedPhotos.push(photo);
                         }
-                        return photo; // Already uploaded or not a data URL
-                    })
-                );
-
+                    } else {
+                        uploadedPhotos.push(photo);
+                    }
+                }
                 recipe.photos = uploadedPhotos;
             }
 
             // Upload cover image to Firebase Storage if it's a data URL
             if (recipe.image && recipe.image.startsWith('data:') && useCloud && storage) {
-                const recipeId = id || generateId();
-                const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
-                recipe.image = coverImageUrl;
+                try {
+                    const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
+                    recipe.image = coverImageUrl;
+                } catch (coverError) {
+                    console.warn('Cover image upload failed, keeping local:', coverError);
+                }
             }
 
             if (id) {
@@ -1671,6 +1717,10 @@
                     }
                 } else {
                     showToast('Error: Could not save recipe. Storage may be full.');
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = 'Save Recipe';
+                    }
                     return;
                 }
             }
@@ -1682,6 +1732,11 @@
         } catch (error) {
             console.error('Error saving recipe:', error);
             showToast('Error saving recipe. Try using smaller images.');
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Recipe';
+            }
         }
     }
 
@@ -2168,20 +2223,60 @@
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredInstallPrompt = e;
-        elements.btnInstall.hidden = false;
     });
 
-    function handleInstall() {
-        if (!deferredInstallPrompt) return;
+    function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
 
-        deferredInstallPrompt.prompt();
-        deferredInstallPrompt.userChoice.then((choice) => {
-            if (choice.outcome === 'accepted') {
-                showToast('App installed!');
-            }
-            deferredInstallPrompt = null;
-            elements.btnInstall.hidden = true;
-        });
+    function isAndroid() {
+        return /Android/.test(navigator.userAgent);
+    }
+
+    function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               window.navigator.standalone === true;
+    }
+
+    function handleInstall() {
+        // If we have the native install prompt, use it
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            deferredInstallPrompt.userChoice.then((choice) => {
+                if (choice.outcome === 'accepted') {
+                    showToast('App installed!');
+                }
+                deferredInstallPrompt = null;
+            });
+            return;
+        }
+
+        // Otherwise show manual instructions
+        const modal = document.getElementById('modal-install');
+        const iosInstructions = document.getElementById('install-ios');
+        const androidInstructions = document.getElementById('install-android');
+        const desktopInstructions = document.getElementById('install-desktop');
+        const alreadyInstalled = document.getElementById('install-already');
+
+        // Hide all instructions first
+        iosInstructions.hidden = true;
+        androidInstructions.hidden = true;
+        desktopInstructions.hidden = true;
+        alreadyInstalled.hidden = true;
+
+        // Check if already installed
+        if (isStandalone()) {
+            alreadyInstalled.hidden = false;
+        } else if (isIOS()) {
+            iosInstructions.hidden = false;
+        } else if (isAndroid()) {
+            androidInstructions.hidden = false;
+        } else {
+            desktopInstructions.hidden = false;
+        }
+
+        openModal(modal);
     }
 
     // ============================================
@@ -2355,19 +2450,29 @@
         }
 
         try {
-            // Convert data URL to blob
-            const response = await fetch(dataUrl);
-            const blob = await response.blob();
+            // Convert data URL to blob using a more reliable method
+            const base64Data = dataUrl.split(',')[1];
+            const mimeType = dataUrl.split(',')[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: mimeType });
 
             // Create storage reference
             const storageRef = storage.ref();
-            const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.jpg`);
+            const extension = mimeType.split('/')[1] || 'jpg';
+            const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.${extension}`);
 
-            // Upload the file
-            const snapshot = await photoRef.put(blob, {
-                contentType: 'image/jpeg',
+            // Upload the file with timeout
+            const uploadPromise = photoRef.put(blob, {
+                contentType: mimeType,
                 cacheControl: 'public, max-age=31536000'
             });
+
+            const snapshot = await uploadPromise;
 
             // Get download URL
             const downloadURL = await snapshot.ref.getDownloadURL();
@@ -2476,7 +2581,10 @@
 
     function updateLightboxImage() {
         if (currentPhotosArray.length > 0) {
-            elements.lightboxImage.src = currentPhotosArray[currentPhotoIndex];
+            const photo = currentPhotosArray[currentPhotoIndex];
+            // Handle both object format and plain URL strings
+            const photoUrl = typeof photo === 'object' ? (photo.dataUrl || photo.storageUrl) : photo;
+            elements.lightboxImage.src = photoUrl;
             elements.lightboxPrev.style.display = currentPhotoIndex > 0 ? 'block' : 'none';
             elements.lightboxNext.style.display = currentPhotoIndex < currentPhotosArray.length - 1 ? 'block' : 'none';
         }
@@ -2508,6 +2616,28 @@
         if (window.innerWidth <= 1024) {
             elements.sidebar.classList.toggle('open', !isHidden);
             elements.sidebarOverlay.classList.toggle('visible', !isHidden);
+        }
+    }
+
+    // ============================================
+    // Mobile Search Toggle
+    // ============================================
+
+    function toggleMobileSearch(show) {
+        const searchContainer = document.getElementById('header-search-container');
+        const searchInput = document.getElementById('header-search');
+
+        if (show) {
+            searchContainer.classList.add('expanded');
+            searchInput.focus();
+        } else {
+            searchContainer.classList.remove('expanded');
+            // Clear search when closing on mobile
+            if (searchInput.value) {
+                searchInput.value = '';
+                currentSearch = '';
+                renderRecipes();
+            }
         }
     }
 
@@ -2616,6 +2746,20 @@
         }
 
         elements.importFile.addEventListener('change', importRecipes);
+
+        // Mobile search toggle
+        const btnSearchToggle = document.getElementById('btn-search-toggle');
+        const btnSearchClose = document.getElementById('btn-search-close');
+        if (btnSearchToggle) {
+            btnSearchToggle.addEventListener('click', () => {
+                toggleMobileSearch(true);
+            });
+        }
+        if (btnSearchClose) {
+            btnSearchClose.addEventListener('click', () => {
+                toggleMobileSearch(false);
+            });
+        }
 
         // Photo import
         if (elements.btnPhotoImport) {
@@ -2785,6 +2929,28 @@
                 showToast('Recipe deleted');
             }
         });
+
+        // Suggestion approve/dismiss buttons in view modal
+        const approveBtn = document.getElementById('btn-approve-suggestion');
+        const dismissBtn = document.getElementById('btn-dismiss-suggestion');
+
+        if (approveBtn) {
+            approveBtn.addEventListener('click', () => {
+                if (currentViewingRecipe) {
+                    closeModal(elements.modalView);
+                    approveRecipe(currentViewingRecipe.id);
+                }
+            });
+        }
+
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                if (currentViewingRecipe) {
+                    closeModal(elements.modalView);
+                    dismissRecipe(currentViewingRecipe.id);
+                }
+            });
+        }
 
         // View modal folder dropdown
         if (elements.btnAddToFolder) {
@@ -2998,7 +3164,9 @@
                     hideAuthOverlay();
                     updateUIForAuth();
                     renderFolders();
-                    showToast('Welcome back, Ivy!');
+                    showToast('hi bh (:');
+                    // Check for new suggestions after a brief delay
+                    setTimeout(checkForNewSuggestions, 500);
                 } else {
                     passwordError.hidden = false;
                     passwordInput.value = '';
@@ -3021,7 +3189,7 @@
                 hideAuthOverlay();
                 updateUIForAuth();
                 renderFolders();
-                showToast('Welcome! You can browse and suggest recipes.');
+                // Non-Ivy users don't get a toast, the message is shown in the auth overlay
             });
         }
     }
@@ -3067,6 +3235,149 @@
 
         // Re-render recipes to update action buttons
         renderRecipes();
+    }
+
+    // ============================================
+    // Suggestions Review System
+    // ============================================
+
+    function getPendingSuggestions() {
+        const recipes = getRecipes();
+        const suggestedFolder = getFolders().find(f => f.name === SUGGESTED_FOLDER_NAME);
+        if (!suggestedFolder) return [];
+
+        return recipes.filter(r =>
+            r.isSuggestion &&
+            r.folders &&
+            r.folders.includes(suggestedFolder.id)
+        );
+    }
+
+    function checkForNewSuggestions() {
+        if (!isIvy) return;
+
+        const suggestions = getPendingSuggestions();
+        if (suggestions.length > 0) {
+            showSuggestionsModal(suggestions);
+        }
+    }
+
+    function showSuggestionsModal(suggestions) {
+        const modal = document.getElementById('modal-suggestions');
+        const grid = document.getElementById('suggestions-grid');
+        if (!modal || !grid) return;
+
+        grid.innerHTML = '';
+
+        suggestions.forEach(recipe => {
+            const card = createSuggestionCard(recipe);
+            grid.appendChild(card);
+        });
+
+        openModal(modal);
+    }
+
+    function createSuggestionCard(recipe) {
+        const card = document.createElement('div');
+        card.className = 'suggestion-card';
+        card.dataset.id = recipe.id;
+
+        const imageHtml = recipe.image
+            ? `<div class="suggestion-card-image" style="background-image: url('${recipe.image}')"></div>`
+            : `<div class="suggestion-card-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+               </div>`;
+
+        const suggestedBy = recipe.suggestedBy ? `Suggested by: ${escapeHtml(recipe.suggestedBy)}` : 'Suggested recipe';
+
+        card.innerHTML = `
+            ${imageHtml}
+            <div class="suggestion-card-body">
+                <h3 class="suggestion-card-title">${escapeHtml(recipe.title)}</h3>
+                <p class="suggestion-card-meta">${suggestedBy}</p>
+                <div class="suggestion-card-actions">
+                    <button class="btn btn-approve" data-action="approve">Add to Recipes</button>
+                    <button class="btn btn-dismiss" data-action="dismiss">Dismiss</button>
+                </div>
+            </div>
+        `;
+
+        // Click on card to view recipe
+        card.querySelector('.suggestion-card-image, .suggestion-card-placeholder, .suggestion-card-title')?.addEventListener('click', () => {
+            closeSuggestionsModal();
+            openViewModal(recipe.id);
+        });
+
+        // Approve button
+        card.querySelector('[data-action="approve"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            approveRecipe(recipe.id);
+        });
+
+        // Dismiss button
+        card.querySelector('[data-action="dismiss"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            dismissRecipe(recipe.id);
+        });
+
+        return card;
+    }
+
+    function approveRecipe(recipeId) {
+        const recipes = getRecipes();
+        const recipe = recipes.find(r => r.id === recipeId);
+        if (!recipe) return;
+
+        // Remove the isSuggestion flag and remove from suggested folder
+        const suggestedFolder = getFolders().find(f => f.name === SUGGESTED_FOLDER_NAME);
+
+        recipe.isSuggestion = false;
+        if (suggestedFolder && recipe.folders) {
+            recipe.folders = recipe.folders.filter(f => f !== suggestedFolder.id);
+            if (recipe.folders.length === 0) {
+                delete recipe.folders;
+            }
+        }
+
+        updateRecipe(recipeId, recipe);
+        showToast('Recipe added to your collection!');
+
+        // Update the suggestions modal
+        refreshSuggestionsModal();
+    }
+
+    function dismissRecipe(recipeId) {
+        if (confirm('Are you sure you want to dismiss this recipe suggestion? This will delete it.')) {
+            deleteRecipe(recipeId);
+            showToast('Suggestion dismissed');
+
+            // Update the suggestions modal
+            refreshSuggestionsModal();
+        }
+    }
+
+    function refreshSuggestionsModal() {
+        const suggestions = getPendingSuggestions();
+        const modal = document.getElementById('modal-suggestions');
+
+        if (suggestions.length === 0) {
+            closeSuggestionsModal();
+            renderRecipes();
+            renderFolders();
+        } else {
+            showSuggestionsModal(suggestions);
+            renderRecipes();
+            renderFolders();
+        }
+    }
+
+    function closeSuggestionsModal() {
+        const modal = document.getElementById('modal-suggestions');
+        if (modal) {
+            closeModal(modal);
+        }
     }
 
     // ============================================
