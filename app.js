@@ -411,6 +411,13 @@
         try {
             const data = JSON.stringify(recipes);
             localStorage.setItem(STORAGE_KEY, data);
+            // Also sync to cloud after successful local save
+            lastSyncTime = Date.now();
+            saveToCloud(recipes).then(success => {
+                if (!success && useCloud) {
+                    console.warn('Cloud sync failed after adding recipe');
+                }
+            });
             return true;
         } catch (e) {
             console.error('Error saving recipes:', e);
@@ -2685,24 +2692,27 @@
     // ============================================
 
     function toggleMobileSearch(show) {
-        const searchContainer = document.getElementById('header-search-container');
-        const searchInput = document.getElementById('header-search');
-        const header = document.querySelector('.header');
+        const popup = document.getElementById('mobile-search-popup');
+        const backdrop = document.getElementById('mobile-search-backdrop');
+        const mobileInput = document.getElementById('mobile-search-input');
+        const headerInput = document.getElementById('header-search');
 
         if (show) {
-            // Position the search bar below the header on mobile
-            if (header && window.innerWidth <= 1024) {
-                const headerRect = header.getBoundingClientRect();
-                searchContainer.style.top = headerRect.bottom + 'px';
+            popup.classList.add('visible');
+            backdrop.classList.add('visible');
+            // Sync with header search value
+            if (headerInput && mobileInput) {
+                mobileInput.value = headerInput.value || '';
             }
-            searchContainer.classList.add('expanded');
-            // Small delay to ensure the element is visible before focusing
-            setTimeout(() => searchInput.focus(), 50);
+            // Focus with delay to ensure element is visible
+            setTimeout(() => mobileInput.focus(), 50);
         } else {
-            searchContainer.classList.remove('expanded');
-            // Clear search when closing on mobile
-            if (searchInput.value) {
-                searchInput.value = '';
+            popup.classList.remove('visible');
+            backdrop.classList.remove('visible');
+            // Clear search when closing
+            if (mobileInput && mobileInput.value) {
+                mobileInput.value = '';
+                if (headerInput) headerInput.value = '';
                 currentSearch = '';
                 renderRecipes();
             }
@@ -2817,15 +2827,32 @@
 
         // Mobile search toggle
         const btnSearchToggle = document.getElementById('btn-search-toggle');
-        const btnSearchClose = document.getElementById('btn-search-close');
+        const mobileSearchClose = document.getElementById('mobile-search-close');
+        const mobileSearchBackdrop = document.getElementById('mobile-search-backdrop');
+        const mobileSearchInput = document.getElementById('mobile-search-input');
+
         if (btnSearchToggle) {
             btnSearchToggle.addEventListener('click', () => {
                 toggleMobileSearch(true);
             });
         }
-        if (btnSearchClose) {
-            btnSearchClose.addEventListener('click', () => {
+        if (mobileSearchClose) {
+            mobileSearchClose.addEventListener('click', () => {
                 toggleMobileSearch(false);
+            });
+        }
+        if (mobileSearchBackdrop) {
+            mobileSearchBackdrop.addEventListener('click', () => {
+                toggleMobileSearch(false);
+            });
+        }
+        if (mobileSearchInput) {
+            mobileSearchInput.addEventListener('input', (e) => {
+                currentSearch = e.target.value;
+                // Also sync to header search
+                const headerInput = document.getElementById('header-search');
+                if (headerInput) headerInput.value = e.target.value;
+                renderRecipes();
             });
         }
 
