@@ -1576,15 +1576,17 @@ h1, h2, h3, h4 {
         position: fixed;
         left: 0;
         right: 0;
-        top: auto;
-        background: var(--color-surface);
+        top: 0;
+        background: rgba(255, 255, 255, 0.97);
         padding: 0.75rem 1rem;
         display: none;
         align-items: center;
         gap: 0.5rem;
-        z-index: 100;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         border-bottom: 1px solid var(--color-border);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
     }
 
     .header-search.expanded {
@@ -1595,6 +1597,9 @@ h1, h2, h3, h4 {
         font-size: 16px; /* Prevent iOS zoom */
         flex: 1;
         min-width: 0;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        border: 1px solid var(--color-border);
     }
 
     .search-close-btn {
