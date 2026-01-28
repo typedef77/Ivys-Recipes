@@ -1663,6 +1663,23 @@
             saveBtn.textContent = 'Saving...';
         }
 
+        // Wrap entire save process with global timeout to prevent infinite saving state
+        const SAVE_TIMEOUT = 60000; // 60 seconds max for entire save
+        let saveCompleted = false;
+
+        const saveTimeoutId = setTimeout(() => {
+            if (!saveCompleted) {
+                console.error('Save operation timed out');
+                showToast('Save timed out. Recipe saved locally.');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Recipe';
+                }
+                closeModal(elements.modalRecipe);
+                renderRecipes();
+            }
+        }, SAVE_TIMEOUT);
+
         try {
             const recipeId = id || generateId();
 
@@ -1721,6 +1738,8 @@
                         saveBtn.disabled = false;
                         saveBtn.textContent = 'Save Recipe';
                     }
+                    saveCompleted = true;
+                    clearTimeout(saveTimeoutId);
                     return;
                 }
             }
@@ -1733,6 +1752,8 @@
             console.error('Error saving recipe:', error);
             showToast('Error saving recipe. Try using smaller images.');
         } finally {
+            saveCompleted = true;
+            clearTimeout(saveTimeoutId);
             if (saveBtn) {
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Recipe';
@@ -2466,16 +2487,30 @@
             const extension = mimeType.split('/')[1] || 'jpg';
             const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.${extension}`);
 
-            // Upload the file with timeout
-            const uploadPromise = photoRef.put(blob, {
-                contentType: mimeType,
-                cacheControl: 'public, max-age=31536000'
+            // Upload with timeout to prevent hanging
+            const UPLOAD_TIMEOUT = 30000; // 30 seconds
+            const uploadPromise = new Promise(async (resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    reject(new Error('Upload timed out'));
+                }, UPLOAD_TIMEOUT);
+
+                try {
+                    const uploadTask = photoRef.put(blob, {
+                        contentType: mimeType,
+                        cacheControl: 'public, max-age=31536000'
+                    });
+
+                    const snapshot = await uploadTask;
+                    clearTimeout(timeoutId);
+                    const downloadURL = await snapshot.ref.getDownloadURL();
+                    resolve(downloadURL);
+                } catch (err) {
+                    clearTimeout(timeoutId);
+                    reject(err);
+                }
             });
 
-            const snapshot = await uploadPromise;
-
-            // Get download URL
-            const downloadURL = await snapshot.ref.getDownloadURL();
+            const downloadURL = await uploadPromise;
             console.log('Photo uploaded successfully:', downloadURL);
             return downloadURL;
         } catch (error) {
@@ -2626,8 +2661,14 @@
     function toggleMobileSearch(show) {
         const searchContainer = document.getElementById('header-search-container');
         const searchInput = document.getElementById('header-search');
+        const header = document.querySelector('.header');
 
         if (show) {
+            // Position the search bar below the header
+            if (header && window.innerWidth <= 768) {
+                const headerRect = header.getBoundingClientRect();
+                searchContainer.style.top = headerRect.bottom + 'px';
+            }
             searchContainer.classList.add('expanded');
             searchInput.focus();
         } else {
