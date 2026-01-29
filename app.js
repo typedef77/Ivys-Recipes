@@ -659,13 +659,23 @@
                 recipe.instructions = data.recipeInstructions.map((step, i) => {
                     if (typeof step === 'string') {
                         return `${i + 1}. ${step}`;
-                    } else if (step.text) {
-                        return `${i + 1}. ${step.text}`;
                     } else if (step['@type'] === 'HowToSection') {
-                        const sectionSteps = step.itemListElement?.map((s, j) =>
-                            `${j + 1}. ${s.text || s}`
-                        ).join('\n') || '';
+                        // Handle HowToSection with nested steps
+                        const sectionSteps = step.itemListElement?.map((s, j) => {
+                            const stepText = typeof s === 'string' ? s : (s.text || s.name || s.description || '');
+                            return stepText ? `${j + 1}. ${stepText}` : '';
+                        }).filter(Boolean).join('\n') || '';
                         return `\n${step.name || 'Section'}:\n${sectionSteps}`;
+                    } else if (step.text || step.name || step.description) {
+                        // Handle HowToStep and similar objects - check multiple properties
+                        const stepText = step.text || step.name || step.description;
+                        return `${i + 1}. ${stepText}`;
+                    } else if (step.itemListElement && Array.isArray(step.itemListElement)) {
+                        // Handle steps with nested itemListElement (some sites nest instructions)
+                        return step.itemListElement.map((s, j) => {
+                            const stepText = typeof s === 'string' ? s : (s.text || s.name || s.description || '');
+                            return stepText ? `${j + 1}. ${stepText}` : '';
+                        }).filter(Boolean).join('\n');
                     }
                     return '';
                 }).filter(Boolean).join('\n\n');
@@ -843,7 +853,7 @@
         photoFile: document.getElementById('photo-file'),
         // Form elements
         recipeForm: document.getElementById('recipe-form'),
-        recipeUrl: document.getElementById('recipe-url'),
+        recipeFetchUrl: document.getElementById('recipe-fetch-url'),
         btnFetchUrl: document.getElementById('btn-fetch-url'),
         modalTitle: document.getElementById('modal-title'),
         imagePreview: document.getElementById('image-preview'),
@@ -1453,7 +1463,7 @@
 
         openModal(elements.modalRecipe);
         if (showUrl) {
-            elements.recipeUrl.focus();
+            elements.recipeFetchUrl.focus();
         } else {
             document.getElementById('recipe-title').focus();
         }
@@ -1839,7 +1849,7 @@
     }
 
     async function handleFetchUrl() {
-        const url = elements.recipeUrl.value.trim();
+        const url = elements.recipeFetchUrl.value.trim();
         if (!url) {
             showToast('Please enter a URL');
             return;
@@ -2236,7 +2246,7 @@
     window.addManualRecipeFromUrl = function(url) {
         closeModal(elements.modalFailedUrls);
         openAddModal(true);
-        elements.recipeUrl.value = url;
+        elements.recipeFetchUrl.value = url;
     };
 
     // ============================================
@@ -2302,7 +2312,7 @@
         if (url) {
             window.history.replaceState({}, '', window.location.pathname);
             openAddModal(true);
-            elements.recipeUrl.value = url;
+            elements.recipeFetchUrl.value = url;
             handleFetchUrl();
         } else if (action === 'add') {
             window.history.replaceState({}, '', window.location.pathname);
@@ -3611,7 +3621,7 @@
             // Open add modal and fetch the recipe
             setTimeout(() => {
                 openAddModal(true);
-                elements.recipeUrl.value = urlToFetch;
+                elements.recipeFetchUrl.value = urlToFetch;
                 handleFetchUrl();
             }, 500);
             return;
