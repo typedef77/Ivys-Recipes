@@ -38,6 +38,11 @@
     padding: 0;
 }
 
+/* Ensure hidden attribute always works even with display overrides */
+[hidden] {
+    display: none !important;
+}
+
 html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
@@ -1803,6 +1808,10 @@ h1, h2, h3, h4 {
     padding: 1rem;
     background: var(--color-cream);
     border-radius: var(--radius-md);
+}
+
+.view-suggestion-actions[hidden] {
+    display: none !important;
 }
 
 .view-suggestion-actions .btn {

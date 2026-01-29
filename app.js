@@ -575,22 +575,29 @@
                     if (!recipe.image) {
                         recipe.image = findBestImage(doc);
                     }
-                    if (recipe.title) return recipe;
+                    // Only return early if we got meaningful data (title AND ingredients or instructions)
+                    if (recipe.title && (recipe.ingredients || recipe.instructions)) {
+                        return recipe;
+                    }
                 }
             } catch (e) {
                 continue;
             }
         }
 
+        // Try microdata if JSON-LD didn't give us complete data
         const microdataRecipe = doc.querySelector('[itemtype*="Recipe"]');
         if (microdataRecipe) {
             extractFromMicrodata(microdataRecipe, recipe);
             if (!recipe.image) {
                 recipe.image = findBestImage(doc);
             }
-            if (recipe.title) return recipe;
+            if (recipe.title && (recipe.ingredients || recipe.instructions)) {
+                return recipe;
+            }
         }
 
+        // Try common CSS selectors as fallback
         extractFromCommonSelectors(doc, recipe);
 
         // Final fallback: always try to find an image if none was extracted
@@ -648,8 +655,18 @@
         recipe.prepTime = formatDuration(data.prepTime);
         recipe.cookTime = formatDuration(data.cookTime) || formatDuration(data.totalTime);
 
-        if (data.recipeIngredient && Array.isArray(data.recipeIngredient)) {
-            recipe.ingredients = data.recipeIngredient.join('\n');
+        // Handle ingredients - check both recipeIngredient and ingredients properties
+        const ingredientData = data.recipeIngredient || data.ingredients;
+        if (ingredientData) {
+            if (Array.isArray(ingredientData)) {
+                recipe.ingredients = ingredientData.map(ing => {
+                    if (typeof ing === 'string') return ing;
+                    if (ing && typeof ing === 'object') return ing.text || ing.name || '';
+                    return '';
+                }).filter(Boolean).join('\n');
+            } else if (typeof ingredientData === 'string') {
+                recipe.ingredients = ingredientData;
+            }
         }
 
         if (data.recipeInstructions) {
@@ -745,28 +762,69 @@
     }
 
     function extractFromCommonSelectors(doc, recipe) {
-        recipe.title = doc.querySelector('h1')?.textContent?.trim() ||
-                       doc.querySelector('.recipe-title')?.textContent?.trim() ||
-                       doc.title || '';
+        // Only set title if not already found
+        if (!recipe.title) {
+            recipe.title = doc.querySelector('h1')?.textContent?.trim() ||
+                           doc.querySelector('.recipe-title')?.textContent?.trim() ||
+                           doc.querySelector('[class*="recipe-name"]')?.textContent?.trim() ||
+                           doc.title || '';
+        }
 
         if (!recipe.image) {
             recipe.image = findBestImage(doc);
         }
 
-        const ingredientsList = doc.querySelector('.ingredients') ||
-                               doc.querySelector('[class*="ingredient"]');
-        if (ingredientsList) {
-            const items = ingredientsList.querySelectorAll('li');
-            recipe.ingredients = Array.from(items).map(li => li.textContent.trim()).join('\n');
+        // Only extract ingredients if not already found
+        if (!recipe.ingredients) {
+            // Try multiple common selectors for ingredients
+            const ingredientSelectors = [
+                '.ingredients li',
+                '[class*="ingredient-list"] li',
+                '[class*="ingredients"] li',
+                '[data-testid*="ingredient"] li',
+                '[class*="recipe-ingredient"]',
+                '.ingredient',
+                '[itemprop="recipeIngredient"]'
+            ];
+
+            for (const selector of ingredientSelectors) {
+                const items = doc.querySelectorAll(selector);
+                if (items.length > 0) {
+                    recipe.ingredients = Array.from(items)
+                        .map(el => el.textContent.trim())
+                        .filter(Boolean)
+                        .join('\n');
+                    if (recipe.ingredients) break;
+                }
+            }
         }
 
-        const instructionsList = doc.querySelector('.instructions') ||
-                                doc.querySelector('[class*="instruction"]');
-        if (instructionsList) {
-            const items = instructionsList.querySelectorAll('li, p');
-            recipe.instructions = Array.from(items).map((el, i) =>
-                `${i + 1}. ${el.textContent.trim()}`
-            ).join('\n\n');
+        // Only extract instructions if not already found
+        if (!recipe.instructions) {
+            // Try multiple common selectors for instructions
+            const instructionSelectors = [
+                '.instructions li',
+                '.instructions p',
+                '[class*="instruction"] li',
+                '[class*="instruction"] p',
+                '[class*="preparation"] li',
+                '[class*="preparation"] p',
+                '[class*="steps"] li',
+                '[class*="recipe-step"]',
+                '[data-testid*="instruction"]',
+                '[itemprop="recipeInstructions"]'
+            ];
+
+            for (const selector of instructionSelectors) {
+                const items = doc.querySelectorAll(selector);
+                if (items.length > 0) {
+                    recipe.instructions = Array.from(items)
+                        .map((el, i) => `${i + 1}. ${el.textContent.trim()}`)
+                        .filter(s => s.length > 3)
+                        .join('\n\n');
+                    if (recipe.instructions) break;
+                }
+            }
         }
     }
 
