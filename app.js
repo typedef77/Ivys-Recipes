@@ -560,7 +560,8 @@
             ingredients: '',
             instructions: '',
             notes: '',
-            source: sourceUrl,
+            source: '',
+            url: sourceUrl,
             tags: []
         };
 
@@ -1474,6 +1475,8 @@
         document.getElementById('recipe-instructions').value = recipe.instructions || '';
         document.getElementById('recipe-notes').value = recipe.notes || '';
         document.getElementById('recipe-source').value = recipe.source || '';
+        // Use url field, or fallback to source if it's a URL (backward compatibility)
+        document.getElementById('recipe-url').value = recipe.url || (recipe.source && recipe.source.startsWith('http') ? recipe.source : '');
         document.getElementById('recipe-photos').value = JSON.stringify(recipe.photos || []);
 
         if (recipe.image) {
@@ -1609,8 +1612,10 @@
         }
 
         const sourceSection = document.getElementById('view-source-section');
-        if (recipe.source && recipe.source.startsWith('http')) {
-            document.getElementById('view-source').href = recipe.source;
+        // Use url field, or fallback to source if it's a URL (backward compatibility)
+        const recipeUrl = recipe.url || (recipe.source && recipe.source.startsWith('http') ? recipe.source : '');
+        if (recipeUrl) {
+            document.getElementById('view-source').href = recipeUrl;
             sourceSection.hidden = false;
         } else {
             sourceSection.hidden = true;
@@ -1676,6 +1681,7 @@
             instructions: document.getElementById('recipe-instructions').value.trim(),
             notes: document.getElementById('recipe-notes').value.trim(),
             source: document.getElementById('recipe-source').value.trim(),
+            url: document.getElementById('recipe-url').value.trim(),
             photos: photos
         };
 
@@ -1853,7 +1859,8 @@
             document.getElementById('recipe-tags').value = cleanTags(recipe.tags || []).join(', ');
             document.getElementById('recipe-ingredients').value = recipe.ingredients || '';
             document.getElementById('recipe-instructions').value = recipe.instructions || '';
-            document.getElementById('recipe-source').value = recipe.source || url;
+            document.getElementById('recipe-source').value = recipe.source || '';
+            document.getElementById('recipe-url').value = recipe.url || url;
 
             if (recipe.image) {
                 elements.imagePreview.style.backgroundImage = `url(${recipe.image})`;
