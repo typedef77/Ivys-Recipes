@@ -584,10 +584,18 @@
         const microdataRecipe = doc.querySelector('[itemtype*="Recipe"]');
         if (microdataRecipe) {
             extractFromMicrodata(microdataRecipe, recipe);
+            if (!recipe.image) {
+                recipe.image = findBestImage(doc);
+            }
             if (recipe.title) return recipe;
         }
 
         extractFromCommonSelectors(doc, recipe);
+
+        // Final fallback: always try to find an image if none was extracted
+        if (!recipe.image) {
+            recipe.image = findBestImage(doc);
+        }
 
         return recipe;
     }
@@ -617,9 +625,16 @@
             if (typeof data.image === 'string') {
                 recipe.image = data.image;
             } else if (Array.isArray(data.image)) {
-                recipe.image = data.image[0]?.url || data.image[0] || '';
-            } else if (data.image.url) {
-                recipe.image = data.image.url;
+                // Handle array of images - could be strings, URLs, or ImageObjects
+                const firstImage = data.image[0];
+                if (typeof firstImage === 'string') {
+                    recipe.image = firstImage;
+                } else if (firstImage && typeof firstImage === 'object') {
+                    recipe.image = firstImage.url || firstImage.contentUrl || firstImage['@id'] || '';
+                }
+            } else if (typeof data.image === 'object') {
+                // Handle ImageObject with various possible URL properties
+                recipe.image = data.image.url || data.image.contentUrl || data.image['@id'] || '';
             }
         }
 
@@ -745,21 +760,30 @@
     }
 
     function findBestImage(doc) {
+        // Priority 1: Open Graph image (most reliable for recipe sites)
         const ogImage = doc.querySelector('meta[property="og:image"]')?.content;
         if (ogImage) return ogImage;
 
+        // Priority 2: Twitter card image
         const twitterImage = doc.querySelector('meta[name="twitter:image"]')?.content;
         if (twitterImage) return twitterImage;
 
+        // Priority 3: Schema.org image meta
+        const schemaImage = doc.querySelector('meta[itemprop="image"]')?.content;
+        if (schemaImage) return schemaImage;
+
+        // Priority 4: Common recipe image selectors
         const recipeSelectors = [
             '.recipe-image img', '.recipe-photo img', '[class*="hero"] img',
-            'article img', '.post-content img', 'main img'
+            '.entry-content img', '.post-content img', '.article-content img',
+            '[class*="featured"] img', '[class*="recipe"] img',
+            'article img', 'main img', '.content img'
         ];
 
         for (const selector of recipeSelectors) {
             const img = doc.querySelector(selector);
-            const src = img?.src || img?.getAttribute('data-src');
-            if (src && !src.includes('icon') && !src.includes('logo')) {
+            const src = img?.src || img?.getAttribute('data-src') || img?.getAttribute('data-lazy-src');
+            if (src && !src.includes('icon') && !src.includes('logo') && !src.includes('avatar') && !src.includes('author')) {
                 return src;
             }
         }
@@ -1597,7 +1621,8 @@
 
     function setupBookmarklet() {
         const appUrl = window.location.href.split('?')[0].split('#')[0];
-        const bookmarkletCode = `javascript:(function(){window.open('${appUrl}?url='+encodeURIComponent(window.location.href),'_blank')})()`;
+        // Use a named window 'ivys_recipes' so the same tab gets reused if already open
+        const bookmarkletCode = `javascript:(function(){window.open('${appUrl}?url='+encodeURIComponent(window.location.href),'ivys_recipes')})()`;
         elements.bookmarkletDrag.href = bookmarkletCode;
     }
 
@@ -1661,7 +1686,7 @@
             return;
         }
 
-        // Handle non-Ivy user suggestions
+        // Handle non-Ivy user suggestions vs Ivy adding directly
         if (!isIvy && !id) {
             const suggesterName = document.getElementById('suggester-name')?.value?.trim() || 'Anonymous';
             recipe.suggestedBy = suggesterName;
@@ -1670,6 +1695,11 @@
             // Add to suggested recipes folder
             const suggestedFolder = getOrCreateSuggestedFolder();
             recipe.folders = [suggestedFolder.id];
+        } else if (isIvy) {
+            // Explicitly clear suggestion flags when Ivy adds/edits a recipe
+            // Set to false/null rather than delete, since updateRecipe merges with existing data
+            recipe.isSuggestion = false;
+            recipe.suggestedBy = null;
         }
 
         // Disable save button to prevent double submission
