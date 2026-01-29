@@ -3298,6 +3298,28 @@
                 navigator.serviceWorker.register('sw.js')
                     .then(registration => {
                         console.log('SW registered:', registration.scope);
+
+                        // Check for updates immediately and periodically
+                        registration.update();
+
+                        // Check for updates every 5 minutes
+                        setInterval(() => {
+                            registration.update();
+                        }, 5 * 60 * 1000);
+
+                        // Handle updates - when new SW is waiting, activate it
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        // New version available, reload to get it
+                                        console.log('New version available, reloading...');
+                                        window.location.reload();
+                                    }
+                                });
+                            }
+                        });
                     })
                     .catch(error => {
                         console.log('SW registration failed:', error);
@@ -3685,7 +3707,7 @@
             return;
         }
 
-        // Listen for messages from service worker (for photo shares)
+        // Listen for messages from service worker (for photo shares and updates)
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'SHARED_FILES') {
@@ -3702,6 +3724,16 @@
                         openPhotoImportModal();
                         showToast(`${files.length} photo(s) received! Add recipe details.`);
                     }
+                }
+                // Handle content updates - reload on next user interaction or after short delay
+                if (event.data && event.data.type === 'CONTENT_UPDATED') {
+                    console.log('New content available');
+                    // Auto-reload after a short delay if user is not actively doing something
+                    setTimeout(() => {
+                        if (!document.querySelector('.modal:not([hidden])')) {
+                            window.location.reload();
+                        }
+                    }, 2000);
                 }
             });
         }
