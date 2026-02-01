@@ -1,11 +1,18 @@
 // Ivy's Recipes - Service Worker
-const CACHE_NAME = 'ivys-recipes-v22';
-const ASSETS_TO_CACHE = [
+// Uses stale-while-revalidate for app files to ensure updates are always fetched
+const CACHE_NAME = 'ivys-recipes-v24';
+
+// Core app files that should use stale-while-revalidate strategy
+const APP_FILES = [
     './',
     './index.html',
     './styles.css',
     './app.js',
-    './manifest.json',
+    './manifest.json'
+];
+
+// Static assets that can use cache-first strategy
+const STATIC_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Pacifico&family=Playfair+Display:wght@600&display=swap'
 ];
 
@@ -15,13 +22,13 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('Caching app assets');
-                return cache.addAll(ASSETS_TO_CACHE);
+                return cache.addAll([...APP_FILES, ...STATIC_ASSETS]);
             })
-            .then(() => self.skipWaiting())
+            .then(() => self.skipWaiting()) // Immediately activate new SW
     );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
@@ -33,11 +40,28 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
-        }).then(() => self.clients.claim())
+        }).then(() => self.clients.claim()) // Take control of all pages immediately
     );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Check if a request is for a core app file
+function isAppFile(url) {
+    const pathname = url.pathname;
+    return pathname.endsWith('/') ||
+           pathname.endsWith('/index.html') ||
+           pathname.endsWith('.html') ||
+           pathname.endsWith('.css') ||
+           pathname.endsWith('.js') ||
+           pathname.endsWith('manifest.json');
+}
+
+// Check if request is for fonts (can be cached longer)
+function isFontRequest(url) {
+    return url.href.includes('fonts.googleapis.com') ||
+           url.href.includes('fonts.gstatic.com');
+}
+
+// Fetch event - different strategies for different content
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
@@ -50,57 +74,86 @@ self.addEventListener('fetch', (event) => {
     // Skip other non-GET requests
     if (event.request.method !== 'GET') return;
 
-    // Skip cross-origin requests except for fonts and the CORS proxy
-    const isExternalAsset = url.origin !== location.origin &&
-        !url.href.includes('fonts.googleapis.com') &&
-        !url.href.includes('fonts.gstatic.com');
-
-    if (isExternalAsset) {
-        // For external requests (like recipe fetching), just use network
+    // Skip cross-origin requests except for fonts
+    const isExternal = url.origin !== location.origin;
+    if (isExternal && !isFontRequest(url)) {
         return;
     }
 
-    event.respondWith(
-        caches.match(event.request)
-            .then((cachedResponse) => {
-                if (cachedResponse) {
-                    // Return cached version
-                    return cachedResponse;
-                }
-
-                // Not in cache, fetch from network
-                return fetch(event.request)
-                    .then((response) => {
-                        // Don't cache non-successful responses
-                        if (!response || response.status !== 200) {
-                            return response;
-                        }
-
-                        // Clone the response
-                        const responseToCache = response.clone();
-
-                        // Cache the fetched response
-                        caches.open(CACHE_NAME)
-                            .then((cache) => {
-                                cache.put(event.request, responseToCache);
-                            });
-
-                        return response;
-                    })
-                    .catch(() => {
-                        // Network failed, try to return a fallback
-                        if (event.request.destination === 'document') {
-                            return caches.match('./index.html');
-                        }
-                    });
-            })
-    );
+    // Use different strategies based on request type
+    if (isAppFile(url) && !isExternal) {
+        // STALE-WHILE-REVALIDATE for app files
+        // Serve from cache immediately, but ALWAYS fetch update in background
+        event.respondWith(staleWhileRevalidate(event.request));
+    } else {
+        // CACHE-FIRST for fonts and other static assets
+        event.respondWith(cacheFirst(event.request));
+    }
 });
+
+// Stale-while-revalidate: Return cached version immediately, fetch update in background
+async function staleWhileRevalidate(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+
+    // Always fetch from network to get latest version
+    const fetchPromise = fetch(request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+            // Update cache with new version
+            cache.put(request, networkResponse.clone());
+
+            // Notify all clients that an update is available
+            notifyClientsOfUpdate();
+        }
+        return networkResponse;
+    }).catch(() => {
+        // Network failed, cached version will be used
+        return null;
+    });
+
+    // Return cached version immediately if available, otherwise wait for network
+    return cachedResponse || fetchPromise;
+}
+
+// Cache-first: Check cache first, fallback to network
+async function cacheFirst(request) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+        return cachedResponse;
+    }
+
+    try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch (error) {
+        // Network failed and not in cache
+        if (request.destination === 'document') {
+            return caches.match('./index.html');
+        }
+        return null;
+    }
+}
+
+// Notify clients that new content is available
+async function notifyClientsOfUpdate() {
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(client => {
+        client.postMessage({ type: 'CONTENT_UPDATED' });
+    });
+}
 
 // Handle messages from the app
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
         self.skipWaiting();
+    }
+    if (event.data && event.data.type === 'CHECK_FOR_UPDATES') {
+        // Force check for SW updates
+        self.registration.update();
     }
 });
 

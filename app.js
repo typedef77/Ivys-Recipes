@@ -1006,13 +1006,20 @@
         }
 
         if (currentSearch) {
-            const search = currentSearch.toLowerCase();
-            filtered = filtered.filter(r =>
-                r.title.toLowerCase().includes(search) ||
-                r.ingredients?.toLowerCase().includes(search) ||
-                r.tags?.some(t => t.toLowerCase().includes(search)) ||
-                r.source?.toLowerCase().includes(search)
-            );
+            const searchTerms = currentSearch.toLowerCase().split(/\s+/).filter(Boolean);
+            filtered = filtered.filter(r => {
+                const searchableText = [
+                    r.title,
+                    r.ingredients,
+                    r.instructions,
+                    r.notes,
+                    r.source,
+                    ...(r.tags || [])
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                // Match if ANY search term is found
+                return searchTerms.some(term => searchableText.includes(term));
+            });
         }
 
         elements.countAll.textContent = recipes.length;
@@ -1689,6 +1696,19 @@
             sourceSection.hidden = true;
         }
 
+        // Show upload section for Ivy only
+        const uploadSection = document.getElementById('view-upload-section');
+        if (uploadSection) {
+            uploadSection.hidden = !isIvy;
+            // Reset upload state
+            const uploadPreviewContainer = document.getElementById('upload-preview-container');
+            const setAsCoverLabel = document.getElementById('set-as-cover-label');
+            if (uploadPreviewContainer) uploadPreviewContainer.hidden = true;
+            if (setAsCoverLabel) setAsCoverLabel.hidden = true;
+            const setAsCover = document.getElementById('set-as-cover');
+            if (setAsCover) setAsCover.checked = false;
+        }
+
         openModal(elements.modalView);
     }
 
@@ -2359,12 +2379,21 @@
         let url = params.get('url');
         const text = params.get('text');
         const action = params.get('action');
+        const recipeId = params.get('recipe');
 
         if (!url && text) {
             const urlMatch = text.match(/https?:\/\/[^\s]+/);
             if (urlMatch) {
                 url = urlMatch[0];
             }
+        }
+
+        // Open specific recipe in full-page mode
+        if (recipeId) {
+            setTimeout(() => {
+                openRecipeFullPage(recipeId);
+            }, 100);
+            return;
         }
 
         if (url) {
@@ -2381,6 +2410,27 @@
                 }
             }, 100);
         }
+    }
+
+    // Open recipe in full-page mode (for new tab view)
+    function openRecipeFullPage(recipeId) {
+        const recipes = getRecipes();
+        const recipe = recipes.find(r => r.id === recipeId);
+
+        if (!recipe) {
+            showToast('Recipe not found');
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+        }
+
+        // Hide main app UI and show recipe in full page
+        document.body.classList.add('full-page-recipe');
+
+        // Open the view modal and make it full-page
+        openViewModal(recipeId);
+
+        // Update page title
+        document.title = `${recipe.title} - Ivy's Recipes`;
     }
 
     // ============================================
@@ -3134,6 +3184,13 @@
         });
 
         // View modal actions
+        document.getElementById('btn-open-new-tab').addEventListener('click', () => {
+            if (currentViewingRecipe) {
+                const url = `${window.location.pathname}?recipe=${currentViewingRecipe.id}`;
+                window.open(url, '_blank');
+            }
+        });
+
         document.getElementById('btn-edit-recipe').addEventListener('click', () => {
             if (currentViewingRecipe) {
                 const recipeId = currentViewingRecipe.id;
@@ -3171,6 +3228,102 @@
                     closeModal(elements.modalView);
                     dismissRecipe(currentViewingRecipe.id);
                 }
+            });
+        }
+
+        // Image upload in view modal
+        const viewImageUpload = document.getElementById('view-image-upload');
+        const btnUploadViewImage = document.getElementById('btn-upload-view-image');
+        const uploadPreview = document.getElementById('upload-preview');
+        const uploadPreviewContainer = document.getElementById('upload-preview-container');
+        const setAsCoverLabel = document.getElementById('set-as-cover-label');
+        const setAsCoverCheckbox = document.getElementById('set-as-cover');
+        const btnSaveUploadedImage = document.getElementById('btn-save-uploaded-image');
+        const btnCancelUpload = document.getElementById('btn-cancel-upload');
+        let pendingUploadDataUrl = null;
+
+        if (btnUploadViewImage && viewImageUpload) {
+            btnUploadViewImage.addEventListener('click', () => {
+                viewImageUpload.click();
+            });
+
+            viewImageUpload.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Convert to data URL for preview
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    pendingUploadDataUrl = event.target.result;
+                    uploadPreview.style.backgroundImage = `url(${pendingUploadDataUrl})`;
+                    uploadPreviewContainer.hidden = false;
+                    setAsCoverLabel.hidden = false;
+                };
+                reader.readAsDataURL(file);
+                e.target.value = ''; // Reset file input
+            });
+        }
+
+        if (btnSaveUploadedImage) {
+            btnSaveUploadedImage.addEventListener('click', async () => {
+                if (!pendingUploadDataUrl || !currentViewingRecipe) return;
+
+                const setAsCover = setAsCoverCheckbox?.checked;
+                btnSaveUploadedImage.disabled = true;
+                btnSaveUploadedImage.textContent = 'Saving...';
+
+                try {
+                    const recipe = currentViewingRecipe;
+                    let imageUrl = pendingUploadDataUrl;
+
+                    // Upload to Firebase Storage if available
+                    if (useCloud && storage) {
+                        const photoId = `photo-${Date.now()}`;
+                        const uploadedUrl = await uploadPhotoToStorage(pendingUploadDataUrl, recipe.id, photoId);
+                        if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
+                            imageUrl = uploadedUrl;
+                        }
+                    }
+
+                    // Update recipe
+                    const updates = {};
+
+                    if (setAsCover) {
+                        updates.image = imageUrl;
+                    } else {
+                        // Add to photos array
+                        const photos = recipe.photos || [];
+                        photos.push({ dataUrl: imageUrl, storageUrl: imageUrl });
+                        updates.photos = photos;
+                    }
+
+                    updateRecipe(recipe.id, updates);
+
+                    // Refresh the view
+                    pendingUploadDataUrl = null;
+                    uploadPreviewContainer.hidden = true;
+                    setAsCoverLabel.hidden = true;
+                    if (setAsCoverCheckbox) setAsCoverCheckbox.checked = false;
+
+                    // Refresh the modal view
+                    openViewModal(recipe.id);
+                    showToast(setAsCover ? 'Cover image updated!' : 'Image added!');
+                } catch (error) {
+                    console.error('Error saving image:', error);
+                    showToast('Error saving image');
+                } finally {
+                    btnSaveUploadedImage.disabled = false;
+                    btnSaveUploadedImage.textContent = 'Save Image';
+                }
+            });
+        }
+
+        if (btnCancelUpload) {
+            btnCancelUpload.addEventListener('click', () => {
+                pendingUploadDataUrl = null;
+                uploadPreviewContainer.hidden = true;
+                setAsCoverLabel.hidden = true;
+                if (setAsCoverCheckbox) setAsCoverCheckbox.checked = false;
             });
         }
 
@@ -3298,6 +3451,28 @@
                 navigator.serviceWorker.register('sw.js')
                     .then(registration => {
                         console.log('SW registered:', registration.scope);
+
+                        // Check for updates immediately and periodically
+                        registration.update();
+
+                        // Check for updates every 5 minutes
+                        setInterval(() => {
+                            registration.update();
+                        }, 5 * 60 * 1000);
+
+                        // Handle updates - when new SW is waiting, activate it
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        // New version available, reload to get it
+                                        console.log('New version available, reloading...');
+                                        window.location.reload();
+                                    }
+                                });
+                            }
+                        });
                     })
                     .catch(error => {
                         console.log('SW registration failed:', error);
@@ -3685,7 +3860,7 @@
             return;
         }
 
-        // Listen for messages from service worker (for photo shares)
+        // Listen for messages from service worker (for photo shares and updates)
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'SHARED_FILES') {
@@ -3702,6 +3877,16 @@
                         openPhotoImportModal();
                         showToast(`${files.length} photo(s) received! Add recipe details.`);
                     }
+                }
+                // Handle content updates - reload on next user interaction or after short delay
+                if (event.data && event.data.type === 'CONTENT_UPDATED') {
+                    console.log('New content available');
+                    // Auto-reload after a short delay if user is not actively doing something
+                    setTimeout(() => {
+                        if (!document.querySelector('.modal:not([hidden])')) {
+                            window.location.reload();
+                        }
+                    }, 2000);
                 }
             });
         }
