@@ -1063,6 +1063,9 @@
         card.className = 'recipe-card';
         card.dataset.id = recipe.id;
 
+        // Recipe URL for new tab opening
+        const recipeUrl = `${window.location.pathname}?recipe=${recipe.id}`;
+
         let sourceName = '';
         if (recipe.source) {
             sourceName = getSourceName(recipe.source);
@@ -1191,17 +1194,25 @@
         }
 
         card.innerHTML = `
-            ${imageHtml}
-            <div class="recipe-card-content">
-                <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
-                ${metaParts.length ? `<div class="recipe-card-meta">${metaParts.join('')}</div>` : ''}
-                ${tagsHtml}
-            </div>
+            <a href="${recipeUrl}" class="recipe-card-link" data-recipe-link>
+                ${imageHtml}
+                <div class="recipe-card-content">
+                    <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
+                    ${metaParts.length ? `<div class="recipe-card-meta">${metaParts.join('')}</div>` : ''}
+                    ${tagsHtml}
+                </div>
+            </a>
         `;
 
         card.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
+            const link = e.target.closest('[data-recipe-link]');
             const recipeId = recipe.id;
+
+            // Allow ctrl+click, cmd+click, middle-click to open in new tab natively
+            if (link && (e.ctrlKey || e.metaKey || e.button === 1)) {
+                return; // Let the browser handle it naturally
+            }
 
             if (btn) {
                 e.stopPropagation();
@@ -1260,6 +1271,8 @@
                     tagsContainer.innerHTML = allTags.map(t => `<span class="recipe-card-tag">${escapeHtml(t)}</span>`).join('');
                 }
             } else {
+                // Normal click opens modal, prevent link navigation
+                e.preventDefault();
                 openViewModal(recipeId);
             }
         });
