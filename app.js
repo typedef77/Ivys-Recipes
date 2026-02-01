@@ -2442,6 +2442,9 @@
         // Open the view modal and make it full-page
         openViewModal(recipeId);
 
+        // Re-enable scrolling for full-page mode (openModal sets overflow:hidden)
+        document.body.style.overflow = 'auto';
+
         // Update page title
         document.title = `${recipe.title} - Ivy's Recipes`;
     }

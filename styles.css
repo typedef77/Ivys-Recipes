@@ -922,12 +922,17 @@ h1, h2, h3, h4 {
 
 .full-page-recipe {
     background-color: var(--color-background);
+    overflow: auto !important;
+    height: auto !important;
 }
 
 .full-page-recipe .modal {
     padding: 0;
     position: relative;
     display: block;
+    height: auto;
+    overflow: visible;
+    inset: auto;
 }
 
 .full-page-recipe .modal-content {
@@ -939,6 +944,7 @@ h1, h2, h3, h4 {
     border-radius: 0;
     box-shadow: none;
     background-color: var(--color-surface);
+    overflow: visible;
 }
 
 .full-page-recipe .modal-view-content {
