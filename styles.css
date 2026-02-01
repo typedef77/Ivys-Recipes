@@ -909,34 +909,67 @@ h1, h2, h3, h4 {
 /* Full-page recipe mode (for new tab view) */
 .full-page-recipe .header,
 .full-page-recipe .sidebar,
-.full-page-recipe .main-content {
+.full-page-recipe .main-content,
+.full-page-recipe .modal-backdrop {
     display: none !important;
 }
 
-.full-page-recipe .modal-backdrop {
+.full-page-recipe {
     background-color: var(--color-background);
 }
 
-.full-page-recipe .modal-content {
-    max-width: 800px;
-    max-height: none;
-    height: auto;
-    min-height: 100vh;
-    border-radius: 0;
-    box-shadow: none;
+.full-page-recipe .modal {
+    padding: 0;
+    position: relative;
+    display: block;
 }
 
-.full-page-recipe .modal-close-btn {
+.full-page-recipe .modal-content {
+    max-width: 900px;
+    width: 100%;
+    max-height: none;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 0;
+    box-shadow: none;
+    background-color: var(--color-surface);
+}
+
+.full-page-recipe .modal-view-content {
+    max-width: 900px;
+}
+
+.full-page-recipe .modal-header {
+    position: relative;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border-light);
+    padding: 1.5rem 2rem;
+}
+
+.full-page-recipe .modal-body {
+    padding: 2rem;
+    background-color: var(--color-surface);
+}
+
+.full-page-recipe .modal-close-btn,
+.full-page-recipe #btn-open-new-tab {
     display: none;
+}
+
+.full-page-recipe .view-image {
+    border-radius: var(--radius-lg);
+    min-height: 300px;
 }
 
 @media (min-width: 768px) {
     .full-page-recipe .modal-content {
-        max-width: 800px;
-        min-height: auto;
         margin: 2rem auto;
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
+    }
+
+    .full-page-recipe .view-image {
+        min-height: 400px;
     }
 }
 
@@ -1469,6 +1502,67 @@ h1, h2, h3, h4 {
 .btn-sm {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
+}
+
+/* Edit Photos Upload Section */
+.edit-photos-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.edit-photos-controls .btn svg {
+    margin-right: 0.5rem;
+}
+
+.edit-photos-controls .help-text {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.edit-photos-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.edit-photos-preview:empty {
+    display: none;
+}
+
+.edit-photo-item {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: var(--radius-sm);
+    background-size: cover;
+    background-position: center;
+    border: 2px solid var(--color-border);
+}
+
+.edit-photo-item .remove-photo {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-danger);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.edit-photo-item .remove-photo:hover {
+    background: var(--color-danger-dark);
 }
 
 .view-source {
