@@ -451,6 +451,13 @@
                                 </button>
                             </div>
                         </div>
+                        <button id="btn-open-new-tab" class="btn btn-icon" aria-label="Open in new tab" title="Open in new tab">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                            </svg>
+                        </button>
                         <button id="btn-edit-recipe" class="btn btn-icon" aria-label="Edit">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -500,6 +507,31 @@
                     <div class="view-section" id="view-notes-section" hidden>
                         <h3>Notes</h3>
                         <p id="view-notes"></p>
+                    </div>
+
+                    <!-- Image Upload Section (Ivy only) -->
+                    <div class="view-section" id="view-upload-section" hidden>
+                        <h3>Upload Image</h3>
+                        <div class="upload-image-controls">
+                            <input type="file" id="view-image-upload" accept="image/*" hidden>
+                            <button type="button" id="btn-upload-view-image" class="btn btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                Upload Image
+                            </button>
+                            <label class="checkbox-label" id="set-as-cover-label" hidden>
+                                <input type="checkbox" id="set-as-cover">
+                                Set as cover image
+                            </label>
+                        </div>
+                        <div id="upload-preview-container" class="upload-preview-container" hidden>
+                            <div id="upload-preview" class="upload-preview"></div>
+                            <button type="button" id="btn-save-uploaded-image" class="btn btn-primary btn-sm">Save Image</button>
+                            <button type="button" id="btn-cancel-upload" class="btn btn-secondary btn-sm">Cancel</button>
+                        </div>
                     </div>
 
                     <div class="view-source" id="view-source-section" hidden>
