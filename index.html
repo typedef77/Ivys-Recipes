@@ -409,6 +409,24 @@
                             <input type="url" id="recipe-url" placeholder="https://...">
                         </div>
 
+                        <!-- Additional Photos Upload Section -->
+                        <div class="form-group" id="edit-photos-upload-section">
+                            <label>Add Photos</label>
+                            <div class="edit-photos-controls">
+                                <input type="file" id="edit-photo-upload" accept="image/*" multiple hidden>
+                                <button type="button" id="btn-edit-upload-photos" class="btn btn-secondary">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    Upload Photos
+                                </button>
+                                <p class="help-text">Add photos to this recipe</p>
+                            </div>
+                            <div id="edit-photos-preview" class="edit-photos-preview"></div>
+                        </div>
+
                         <div class="form-group" id="suggester-section" hidden>
                             <label for="suggester-name">Your Name (optional)</label>
                             <input type="text" id="suggester-name" placeholder="So Ivy knows who suggested this!">

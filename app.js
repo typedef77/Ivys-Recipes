@@ -1017,8 +1017,8 @@
                     ...(r.tags || [])
                 ].filter(Boolean).join(' ').toLowerCase();
 
-                // Match if ANY search term is found
-                return searchTerms.some(term => searchableText.includes(term));
+                // Match only if ALL search terms are found (AND logic)
+                return searchTerms.every(term => searchableText.includes(term));
             });
         }
 
@@ -3171,6 +3171,98 @@
             });
         }
 
+        // Edit modal photo upload
+        const editPhotoUpload = document.getElementById('edit-photo-upload');
+        const btnEditUploadPhotos = document.getElementById('btn-edit-upload-photos');
+        const editPhotosPreview = document.getElementById('edit-photos-preview');
+        let editPendingPhotos = [];
+
+        if (btnEditUploadPhotos && editPhotoUpload) {
+            btnEditUploadPhotos.addEventListener('click', () => {
+                editPhotoUpload.click();
+            });
+
+            editPhotoUpload.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    if (file && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const dataUrl = event.target.result;
+                            editPendingPhotos.push({ dataUrl, file });
+                            renderEditPhotosPreview();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+                e.target.value = ''; // Reset file input
+            });
+        }
+
+        function renderEditPhotosPreview() {
+            if (!editPhotosPreview) return;
+
+            // Get existing photos from the recipe being edited
+            const existingPhotosJson = document.getElementById('recipe-photos')?.value || '[]';
+            let existingPhotos = [];
+            try {
+                existingPhotos = JSON.parse(existingPhotosJson);
+            } catch (e) {
+                existingPhotos = [];
+            }
+
+            // Combine existing and pending photos
+            const allPhotos = [...existingPhotos, ...editPendingPhotos];
+
+            editPhotosPreview.innerHTML = allPhotos.map((photo, index) => {
+                const photoUrl = photo.dataUrl || photo.storageUrl || photo;
+                return `
+                    <div class="edit-photo-item" style="background-image: url('${photoUrl}')" data-index="${index}">
+                        <button type="button" class="remove-photo" data-index="${index}">&times;</button>
+                    </div>
+                `;
+            }).join('');
+
+            // Add remove handlers
+            editPhotosPreview.querySelectorAll('.remove-photo').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const index = parseInt(btn.dataset.index);
+                    if (index < existingPhotos.length) {
+                        // Remove from existing photos
+                        existingPhotos.splice(index, 1);
+                        document.getElementById('recipe-photos').value = JSON.stringify(existingPhotos);
+                    } else {
+                        // Remove from pending photos
+                        const pendingIndex = index - existingPhotos.length;
+                        editPendingPhotos.splice(pendingIndex, 1);
+                    }
+                    renderEditPhotosPreview();
+                });
+            });
+
+            // Update hidden field with combined photos
+            const combinedPhotos = [...existingPhotos, ...editPendingPhotos];
+            document.getElementById('recipe-photos').value = JSON.stringify(combinedPhotos);
+        }
+
+        // Clear pending photos when opening add modal
+        const originalOpenAddModal = openAddModal;
+        openAddModal = function(showUrl = false) {
+            editPendingPhotos = [];
+            if (editPhotosPreview) editPhotosPreview.innerHTML = '';
+            originalOpenAddModal(showUrl);
+        };
+
+        // Load existing photos when opening edit modal
+        const originalOpenEditModal = openEditModal;
+        openEditModal = function(id) {
+            editPendingPhotos = [];
+            originalOpenEditModal(id);
+            // Render existing photos after modal opens
+            setTimeout(renderEditPhotosPreview, 100);
+        };
+
         // Tag suggestions
         document.querySelectorAll('.tag-suggestion').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -3276,12 +3368,17 @@
                     const recipe = currentViewingRecipe;
                     let imageUrl = pendingUploadDataUrl;
 
-                    // Upload to Firebase Storage if available
+                    // Try to upload to Firebase Storage if available
                     if (useCloud && storage) {
-                        const photoId = `photo-${Date.now()}`;
-                        const uploadedUrl = await uploadPhotoToStorage(pendingUploadDataUrl, recipe.id, photoId);
-                        if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
-                            imageUrl = uploadedUrl;
+                        try {
+                            const photoId = `photo-${Date.now()}`;
+                            const uploadedUrl = await uploadPhotoToStorage(pendingUploadDataUrl, recipe.id, photoId);
+                            if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
+                                imageUrl = uploadedUrl;
+                            }
+                        } catch (uploadError) {
+                            console.warn('Cloud upload failed, saving locally:', uploadError);
+                            // Continue with data URL - will be saved locally
                         }
                     }
 
@@ -3305,12 +3402,13 @@
                     setAsCoverLabel.hidden = true;
                     if (setAsCoverCheckbox) setAsCoverCheckbox.checked = false;
 
-                    // Refresh the modal view
+                    // Refresh the modal view and recipe list
                     openViewModal(recipe.id);
+                    renderRecipes();
                     showToast(setAsCover ? 'Cover image updated!' : 'Image added!');
                 } catch (error) {
                     console.error('Error saving image:', error);
-                    showToast('Error saving image');
+                    showToast('Error saving image. Try a smaller image.');
                 } finally {
                     btnSaveUploadedImage.disabled = false;
                     btnSaveUploadedImage.textContent = 'Save Image';
