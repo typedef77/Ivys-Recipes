@@ -2324,20 +2324,22 @@
 
     /**
      * Compress an image file to a smaller size
+     * Aggressively compresses large phone photos (iPhone, Pixel, etc.)
+     * Target: ~50-100KB per image for reliable storage
      * @param {File|Blob} file - The image file to compress
      * @param {Object} options - Compression options
-     * @param {number} options.maxWidth - Maximum width in pixels (default: 800)
-     * @param {number} options.quality - JPEG quality 0-1 (default: 0.75)
+     * @param {number} options.maxWidth - Maximum width in pixels (default: 600)
+     * @param {number} options.quality - JPEG quality 0-1 (default: 0.6)
+     * @param {number} options.maxSizeKB - Max file size in KB (default: 100)
      * @returns {Promise<string>} - Compressed image as base64 data URL
      */
     function compressImage(file, options = {}) {
-        const maxWidth = options.maxWidth || 800;
-        const quality = options.quality || 0.75;
+        const maxWidth = options.maxWidth || 600;
+        const initialQuality = options.quality || 0.6;
+        const maxSizeKB = options.maxSizeKB || 100;
 
         return new Promise((resolve, reject) => {
             const img = new Image();
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
 
             img.onload = () => {
                 // Calculate new dimensions
@@ -2349,13 +2351,37 @@
                     width = maxWidth;
                 }
 
-                // Draw to canvas
+                // Create canvas and draw
+                const canvas = document.createElement('canvas');
                 canvas.width = width;
                 canvas.height = height;
+                const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Convert to compressed JPEG
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                // Iteratively compress until under target size
+                let quality = initialQuality;
+                let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+
+                // Check size and re-compress if needed (base64 is ~33% larger than binary)
+                let sizeKB = Math.round((compressedDataUrl.length * 0.75) / 1024);
+
+                while (sizeKB > maxSizeKB && quality > 0.3) {
+                    quality -= 0.1;
+                    compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    sizeKB = Math.round((compressedDataUrl.length * 0.75) / 1024);
+                }
+
+                // If still too large, reduce dimensions further
+                if (sizeKB > maxSizeKB && width > 400) {
+                    const smallerWidth = 400;
+                    const smallerHeight = Math.round((height * smallerWidth) / width);
+                    canvas.width = smallerWidth;
+                    canvas.height = smallerHeight;
+                    ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight);
+                    compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                }
+
+                console.log(`Image compressed: ${sizeKB}KB, quality: ${quality.toFixed(1)}, ${width}x${height}`);
                 resolve(compressedDataUrl);
             };
 
@@ -2583,82 +2609,23 @@
     function handlePhotoSelect(files) {
         const fileList = files instanceof FileList ? Array.from(files) : [files];
 
-        fileList.forEach(file => {
+        fileList.forEach(async file => {
             if (!file || !file.type.startsWith('image/')) {
                 return;
             }
 
-            // Compress image before storing - use smaller size for mobile
-            compressImage(file, 800, 0.6).then(compressedDataUrl => {
+            try {
+                // Compress image - uses aggressive defaults for phone photos
+                const compressedDataUrl = await compressImage(file);
                 selectedPhotos.push({
                     file: file,
                     dataUrl: compressedDataUrl
                 });
                 updatePhotoPreviewDisplay();
-            }).catch(err => {
+            } catch (err) {
                 console.error('Error compressing image:', err);
-                // Fallback - try with even more compression
-                compressImage(file, 600, 0.4).then(compressedDataUrl => {
-                    selectedPhotos.push({
-                        file: file,
-                        dataUrl: compressedDataUrl
-                    });
-                    updatePhotoPreviewDisplay();
-                }).catch(() => {
-                    showToast('Error processing image. Try a smaller photo.');
-                });
-            });
-        });
-    }
-
-    function compressImage(file, maxWidth, quality) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Scale down more aggressively for mobile storage limits
-                    // Max 800px width for cookbook photos to keep file size manageable
-                    const effectiveMaxWidth = maxWidth || 800;
-                    if (width > effectiveMaxWidth) {
-                        height = (height * effectiveMaxWidth) / width;
-                        width = effectiveMaxWidth;
-                    }
-
-                    // Also limit height to prevent very tall images
-                    const maxHeight = 1200;
-                    if (height > maxHeight) {
-                        width = (width * maxHeight) / height;
-                        height = maxHeight;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Use lower quality for better compression (0.6 instead of 0.8)
-                    const effectiveQuality = quality || 0.6;
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', effectiveQuality);
-
-                    // If still too large (>500KB), try again with lower quality
-                    if (compressedDataUrl.length > 500000 && effectiveQuality > 0.3) {
-                        canvas.toDataURL('image/jpeg', 0.4);
-                        resolve(canvas.toDataURL('image/jpeg', 0.4));
-                    } else {
-                        resolve(compressedDataUrl);
-                    }
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
+                showToast('Error processing image. Try a smaller photo.');
+            }
         });
     }
 
@@ -3086,7 +3053,7 @@
                 if (file && file.type.startsWith('image/')) {
                     try {
                         // Compress cover image before storing
-                        const compressedDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
+                        const compressedDataUrl = await compressImage(file);
                         document.getElementById('recipe-image').value = compressedDataUrl;
                         elements.imagePreview.style.backgroundImage = `url(${compressedDataUrl})`;
                         elements.imagePreview.hidden = false;
@@ -3115,7 +3082,7 @@
                     if (file && file.type.startsWith('image/')) {
                         try {
                             // Compress image before storing
-                            const compressedDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
+                            const compressedDataUrl = await compressImage(file);
                             editPendingPhotos.push({ dataUrl: compressedDataUrl });
                             renderEditPhotosPreview();
                         } catch (err) {
@@ -3274,7 +3241,7 @@
 
                 try {
                     // Compress image before storing
-                    pendingUploadDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
+                    pendingUploadDataUrl = await compressImage(file);
                     uploadPreview.style.backgroundImage = `url(${pendingUploadDataUrl})`;
                     uploadPreviewContainer.hidden = false;
                     setAsCoverLabel.hidden = false;
