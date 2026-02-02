@@ -1836,69 +1836,8 @@
         try {
             const recipeId = id || generateId();
 
-            // Upload photos to Firebase Storage if available
-            if (recipe.photos && recipe.photos.length > 0) {
-                if (useCloud && storage) {
-                    showToast('Uploading photos to cloud...');
-
-                    // Upload each photo sequentially for better error handling
-                    const uploadedPhotos = [];
-                    for (let index = 0; index < recipe.photos.length; index++) {
-                        const photo = recipe.photos[index];
-                        if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                            const photoId = `photo-${index}-${Date.now()}`;
-                            try {
-                                const url = await uploadPhotoToStorage(photo.dataUrl, recipeId, photoId);
-                                // Only keep the storage URL, remove base64 data to save localStorage space
-                                if (url && !url.startsWith('data:')) {
-                                    uploadedPhotos.push({
-                                        dataUrl: url,
-                                        storageUrl: url
-                                    });
-                                } else {
-                                    // Upload returned base64 (failed), skip this photo for localStorage
-                                    console.warn('Photo upload returned base64, skipping for storage');
-                                    uploadedPhotos.push({ dataUrl: url, storageUrl: url });
-                                }
-                            } catch (uploadError) {
-                                console.warn('Photo upload failed:', uploadError);
-                                // Skip failed photos to avoid localStorage quota issues
-                                showToast('Some photos could not be uploaded');
-                            }
-                        } else {
-                            uploadedPhotos.push(photo);
-                        }
-                    }
-                    recipe.photos = uploadedPhotos;
-                } else {
-                    // No cloud storage - warn user about potential storage issues
-                    console.warn('Cloud storage not available, cookbook photos may not save properly');
-                    showToast('Cloud storage not available. Photos may not save.');
-                    // Clear photos to avoid localStorage quota issues
-                    recipe.photos = [];
-                }
-            }
-
-            // Upload cover image to Firebase Storage if it's a data URL
-            if (recipe.image && recipe.image.startsWith('data:')) {
-                if (useCloud && storage) {
-                    try {
-                        const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
-                        if (coverImageUrl && !coverImageUrl.startsWith('data:')) {
-                            recipe.image = coverImageUrl;
-                        } else {
-                            // Upload failed, clear the image to avoid localStorage issues
-                            recipe.image = '';
-                        }
-                    } catch (coverError) {
-                        console.warn('Cover image upload failed:', coverError);
-                        recipe.image = '';
-                    }
-                } else {
-                    // No cloud storage, clear large base64 image
-                    recipe.image = '';
-                }
-            }
+            // Photos are already compressed, store them directly
+            // No need to upload to Firebase Storage - they sync with recipe data
 
             if (id) {
                 updateRecipe(id, recipe);
@@ -2383,6 +2322,90 @@
         }, 3000);
     }
 
+    /**
+     * Compress an image file to a smaller size
+     * Aggressively compresses large phone photos (iPhone, Pixel, etc.)
+     * Target: ~50-100KB per image for reliable storage
+     * @param {File|Blob} file - The image file to compress
+     * @param {Object} options - Compression options
+     * @param {number} options.maxWidth - Maximum width in pixels (default: 600)
+     * @param {number} options.quality - JPEG quality 0-1 (default: 0.6)
+     * @param {number} options.maxSizeKB - Max file size in KB (default: 100)
+     * @returns {Promise<string>} - Compressed image as base64 data URL
+     */
+    function compressImage(file, options = {}) {
+        const maxWidth = options.maxWidth || 600;
+        const initialQuality = options.quality || 0.6;
+        const maxSizeKB = options.maxSizeKB || 100;
+
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+
+            img.onload = () => {
+                // Calculate new dimensions
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                // Create canvas and draw
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Iteratively compress until under target size
+                let quality = initialQuality;
+                let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+
+                // Check size and re-compress if needed (base64 is ~33% larger than binary)
+                let sizeKB = Math.round((compressedDataUrl.length * 0.75) / 1024);
+
+                while (sizeKB > maxSizeKB && quality > 0.3) {
+                    quality -= 0.1;
+                    compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    sizeKB = Math.round((compressedDataUrl.length * 0.75) / 1024);
+                }
+
+                // If still too large, reduce dimensions further
+                if (sizeKB > maxSizeKB && width > 400) {
+                    const smallerWidth = 400;
+                    const smallerHeight = Math.round((height * smallerWidth) / width);
+                    canvas.width = smallerWidth;
+                    canvas.height = smallerHeight;
+                    ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight);
+                    compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                }
+
+                console.log(`Image compressed: ${sizeKB}KB, quality: ${quality.toFixed(1)}, ${width}x${height}`);
+                resolve(compressedDataUrl);
+            };
+
+            img.onerror = () => {
+                reject(new Error('Failed to load image'));
+            };
+
+            // Load image from file
+            if (file instanceof File || file instanceof Blob) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            } else if (typeof file === 'string') {
+                // Already a data URL
+                img.src = file;
+            } else {
+                reject(new Error('Invalid input: expected File, Blob, or data URL string'));
+            }
+        });
+    }
+
     // ============================================
     // URL Parameters (for bookmarklet)
     // ============================================
@@ -2586,185 +2609,38 @@
     function handlePhotoSelect(files) {
         const fileList = files instanceof FileList ? Array.from(files) : [files];
 
-        fileList.forEach(file => {
+        fileList.forEach(async file => {
             if (!file || !file.type.startsWith('image/')) {
                 return;
             }
 
-            // Compress image before storing - use smaller size for mobile
-            compressImage(file, 800, 0.6).then(compressedDataUrl => {
+            try {
+                // Compress image - uses aggressive defaults for phone photos
+                const compressedDataUrl = await compressImage(file);
                 selectedPhotos.push({
                     file: file,
                     dataUrl: compressedDataUrl
                 });
                 updatePhotoPreviewDisplay();
-            }).catch(err => {
+            } catch (err) {
                 console.error('Error compressing image:', err);
-                // Fallback - try with even more compression
-                compressImage(file, 600, 0.4).then(compressedDataUrl => {
-                    selectedPhotos.push({
-                        file: file,
-                        dataUrl: compressedDataUrl
-                    });
-                    updatePhotoPreviewDisplay();
-                }).catch(() => {
-                    showToast('Error processing image. Try a smaller photo.');
-                });
-            });
-        });
-    }
-
-    function compressImage(file, maxWidth, quality) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Scale down more aggressively for mobile storage limits
-                    // Max 800px width for cookbook photos to keep file size manageable
-                    const effectiveMaxWidth = maxWidth || 800;
-                    if (width > effectiveMaxWidth) {
-                        height = (height * effectiveMaxWidth) / width;
-                        width = effectiveMaxWidth;
-                    }
-
-                    // Also limit height to prevent very tall images
-                    const maxHeight = 1200;
-                    if (height > maxHeight) {
-                        width = (width * maxHeight) / height;
-                        height = maxHeight;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Use lower quality for better compression (0.6 instead of 0.8)
-                    const effectiveQuality = quality || 0.6;
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', effectiveQuality);
-
-                    // If still too large (>500KB), try again with lower quality
-                    if (compressedDataUrl.length > 500000 && effectiveQuality > 0.3) {
-                        canvas.toDataURL('image/jpeg', 0.4);
-                        resolve(canvas.toDataURL('image/jpeg', 0.4));
-                    } else {
-                        resolve(compressedDataUrl);
-                    }
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    // ============================================
-    // Firebase Storage Functions
-    // ============================================
-
-    /**
-     * Upload a photo to Firebase Storage
-     * @param {string} dataUrl - Base64 data URL of the image
-     * @param {string} recipeId - Recipe ID for organizing photos
-     * @param {string} photoId - Unique ID for this photo
-     * @returns {Promise<string>} - Download URL of uploaded photo
-     */
-    async function uploadPhotoToStorage(dataUrl, recipeId, photoId) {
-        if (!useCloud || !storage) {
-            console.warn('Firebase Storage not available');
-            throw new Error('Cloud storage not available');
-        }
-
-        try {
-            // Convert data URL to blob using a more reliable method
-            const base64Data = dataUrl.split(',')[1];
-            const mimeType = dataUrl.split(',')[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                showToast('Error processing image. Try a smaller photo.');
             }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: mimeType });
-
-            // Create storage reference
-            const storageRef = storage.ref();
-            const extension = mimeType.split('/')[1] || 'jpg';
-            const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.${extension}`);
-
-            // Upload with timeout to prevent hanging
-            const UPLOAD_TIMEOUT = 15000; // 15 seconds per photo
-            const uploadPromise = new Promise(async (resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    reject(new Error('Upload timed out'));
-                }, UPLOAD_TIMEOUT);
-
-                try {
-                    const uploadTask = photoRef.put(blob, {
-                        contentType: mimeType,
-                        cacheControl: 'public, max-age=31536000'
-                    });
-
-                    const snapshot = await uploadTask;
-                    clearTimeout(timeoutId);
-                    const downloadURL = await snapshot.ref.getDownloadURL();
-                    resolve(downloadURL);
-                } catch (err) {
-                    clearTimeout(timeoutId);
-                    reject(err);
-                }
-            });
-
-            const downloadURL = await uploadPromise;
-            console.log('Photo uploaded successfully:', downloadURL);
-            return downloadURL;
-        } catch (error) {
-            console.error('Error uploading photo to Firebase Storage:', error);
-            // Throw error instead of returning base64 to prevent localStorage overflow
-            throw error;
-        }
+        });
     }
 
+    // ============================================
+    // Photo Storage Helpers (for backwards compatibility)
+    // ============================================
+
     /**
-     * Download a photo from Firebase Storage (or return if already a data URL)
+     * Get photo URL - handles both data URLs and Firebase Storage URLs
      * @param {string} photoUrl - Firebase Storage URL or data URL
-     * @returns {Promise<string>} - Data URL of the photo
+     * @returns {string} - URL for display
      */
-    async function downloadPhotoFromStorage(photoUrl) {
-        // If it's already a data URL, return it
-        if (photoUrl && photoUrl.startsWith('data:')) {
-            return photoUrl;
-        }
-
-        // If it's a Firebase Storage URL, it can be used directly
-        // We'll keep the URL as-is for display, no need to convert to base64
+    function getPhotoUrl(photoUrl) {
+        // Both data URLs and Firebase Storage URLs can be used directly
         return photoUrl;
-    }
-
-    /**
-     * Delete a photo from Firebase Storage
-     * @param {string} photoUrl - Firebase Storage URL to delete
-     */
-    async function deletePhotoFromStorage(photoUrl) {
-        if (!useCloud || !storage || !photoUrl || photoUrl.startsWith('data:')) {
-            return; // Not a storage URL or storage not available
-        }
-
-        try {
-            const storageRef = storage.refFromURL(photoUrl);
-            await storageRef.delete();
-            console.log('Photo deleted from storage:', photoUrl);
-        } catch (error) {
-            console.warn('Error deleting photo from storage:', error);
-            // Not critical if delete fails
-        }
     }
 
     function processCookbookPhoto() {
@@ -3172,17 +3048,19 @@
             });
         }
         if (elements.recipeImageFile) {
-            elements.recipeImageFile.addEventListener('change', (e) => {
+            elements.recipeImageFile.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (file && file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const dataUrl = event.target.result;
-                        document.getElementById('recipe-image').value = dataUrl;
-                        elements.imagePreview.style.backgroundImage = `url(${dataUrl})`;
+                    try {
+                        // Compress cover image before storing
+                        const compressedDataUrl = await compressImage(file);
+                        document.getElementById('recipe-image').value = compressedDataUrl;
+                        elements.imagePreview.style.backgroundImage = `url(${compressedDataUrl})`;
                         elements.imagePreview.hidden = false;
-                    };
-                    reader.readAsDataURL(file);
+                    } catch (err) {
+                        console.error('Error compressing image:', err);
+                        showToast('Error processing image');
+                    }
                 }
             });
         }
@@ -3198,19 +3076,21 @@
                 editPhotoUpload.click();
             });
 
-            editPhotoUpload.addEventListener('change', (e) => {
+            editPhotoUpload.addEventListener('change', async (e) => {
                 const files = Array.from(e.target.files);
-                files.forEach(file => {
+                for (const file of files) {
                     if (file && file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const dataUrl = event.target.result;
-                            editPendingPhotos.push({ dataUrl, file });
+                        try {
+                            // Compress image before storing
+                            const compressedDataUrl = await compressImage(file);
+                            editPendingPhotos.push({ dataUrl: compressedDataUrl });
                             renderEditPhotosPreview();
-                        };
-                        reader.readAsDataURL(file);
+                        } catch (err) {
+                            console.error('Error compressing image:', err);
+                            showToast('Error processing image');
+                        }
                     }
-                });
+                }
                 e.target.value = ''; // Reset file input
             });
         }
@@ -3359,15 +3239,16 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // Convert to data URL for preview
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    pendingUploadDataUrl = event.target.result;
+                try {
+                    // Compress image before storing
+                    pendingUploadDataUrl = await compressImage(file);
                     uploadPreview.style.backgroundImage = `url(${pendingUploadDataUrl})`;
                     uploadPreviewContainer.hidden = false;
                     setAsCoverLabel.hidden = false;
-                };
-                reader.readAsDataURL(file);
+                } catch (err) {
+                    console.error('Error compressing image:', err);
+                    showToast('Error processing image');
+                }
                 e.target.value = ''; // Reset file input
             });
         }
@@ -3382,21 +3263,8 @@
 
                 try {
                     const recipe = currentViewingRecipe;
-                    let imageUrl = pendingUploadDataUrl;
-
-                    // Try to upload to Firebase Storage if available
-                    if (useCloud && storage) {
-                        try {
-                            const photoId = `photo-${Date.now()}`;
-                            const uploadedUrl = await uploadPhotoToStorage(pendingUploadDataUrl, recipe.id, photoId);
-                            if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
-                                imageUrl = uploadedUrl;
-                            }
-                        } catch (uploadError) {
-                            console.warn('Cloud upload failed, saving locally:', uploadError);
-                            // Continue with data URL - will be saved locally
-                        }
-                    }
+                    // Image is already compressed, store directly
+                    const imageUrl = pendingUploadDataUrl;
 
                     // Update recipe
                     const updates = {};
@@ -3406,7 +3274,7 @@
                     } else {
                         // Add to photos array
                         const photos = recipe.photos || [];
-                        photos.push({ dataUrl: imageUrl, storageUrl: imageUrl });
+                        photos.push({ dataUrl: imageUrl });
                         updates.photos = photos;
                     }
 
@@ -4072,97 +3940,6 @@
     }
 
     // ============================================
-    // Photo Migration
-    // ============================================
-
-    /**
-     * Migrate existing base64 photos to Firebase Storage
-     * This runs once in the background to move photos from localStorage to cloud
-     */
-    async function migratePhotosToStorage() {
-        if (!useCloud || !storage) {
-            return; // Cloud storage not available
-        }
-
-        try {
-            const recipes = getRecipes();
-            let migrationCount = 0;
-            const migrationKey = 'ivys_photo_migration_done';
-
-            // Check if migration already completed
-            const migrationDone = localStorage.getItem(migrationKey);
-            if (migrationDone === 'true') {
-                return; // Already migrated
-            }
-
-            console.log('Starting photo migration to Firebase Storage...');
-
-            for (const recipe of recipes) {
-                let recipeUpdated = false;
-
-                // Migrate cover image if it's a data URL
-                if (recipe.image && recipe.image.startsWith('data:')) {
-                    try {
-                        const storageUrl = await uploadPhotoToStorage(recipe.image, recipe.id, 'cover');
-                        if (!storageUrl.startsWith('data:')) {
-                            recipe.image = storageUrl;
-                            recipeUpdated = true;
-                            migrationCount++;
-                        }
-                    } catch (error) {
-                        console.warn('Failed to migrate cover image for recipe:', recipe.id, error);
-                    }
-                }
-
-                // Migrate recipe photos if they're data URLs
-                if (recipe.photos && Array.isArray(recipe.photos) && recipe.photos.length > 0) {
-                    const migratedPhotos = await Promise.all(
-                        recipe.photos.map(async (photo, index) => {
-                            if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                                try {
-                                    const photoId = `photo-${index}-${Date.now()}`;
-                                    const storageUrl = await uploadPhotoToStorage(photo.dataUrl, recipe.id, photoId);
-                                    if (!storageUrl.startsWith('data:')) {
-                                        migrationCount++;
-                                        return {
-                                            ...photo,
-                                            dataUrl: storageUrl,
-                                            storageUrl: storageUrl
-                                        };
-                                    }
-                                } catch (error) {
-                                    console.warn('Failed to migrate photo for recipe:', recipe.id, error);
-                                }
-                            }
-                            return photo;
-                        })
-                    );
-
-                    if (JSON.stringify(migratedPhotos) !== JSON.stringify(recipe.photos)) {
-                        recipe.photos = migratedPhotos;
-                        recipeUpdated = true;
-                    }
-                }
-
-                // Update recipe if any photos were migrated
-                if (recipeUpdated) {
-                    updateRecipe(recipe.id, recipe);
-                }
-            }
-
-            if (migrationCount > 0) {
-                console.log(`Migration complete: ${migrationCount} photos uploaded to cloud storage`);
-                showToast(`${migrationCount} photos backed up to cloud!`);
-            }
-
-            // Mark migration as complete
-            localStorage.setItem(migrationKey, 'true');
-        } catch (error) {
-            console.error('Error during photo migration:', error);
-        }
-    }
-
-    // ============================================
     // Initialize
     // ============================================
 
@@ -4196,10 +3973,7 @@
                 await loadFromCloud();
             }
 
-            // Migrate existing photos to cloud storage (runs in background)
-            setTimeout(() => {
-                migratePhotosToStorage();
-            }, 2000); // Wait 2 seconds after load to avoid blocking UI
+            // Photo migration disabled - photos now stored as compressed base64 directly with recipe data
         } else {
             // Firebase failed to initialize, show offline status
             initCloudSyncButton();
