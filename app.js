@@ -2663,105 +2663,17 @@
     }
 
     // ============================================
-    // Firebase Storage Functions
+    // Photo Storage Helpers (for backwards compatibility)
     // ============================================
 
     /**
-     * Upload a photo to Firebase Storage
-     * @param {string} dataUrl - Base64 data URL of the image
-     * @param {string} recipeId - Recipe ID for organizing photos
-     * @param {string} photoId - Unique ID for this photo
-     * @returns {Promise<string>} - Download URL of uploaded photo
-     */
-    async function uploadPhotoToStorage(dataUrl, recipeId, photoId) {
-        if (!useCloud || !storage) {
-            console.warn('Firebase Storage not available');
-            throw new Error('Cloud storage not available');
-        }
-
-        try {
-            // Convert data URL to blob using a more reliable method
-            const base64Data = dataUrl.split(',')[1];
-            const mimeType = dataUrl.split(',')[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: mimeType });
-
-            // Create storage reference
-            const storageRef = storage.ref();
-            const extension = mimeType.split('/')[1] || 'jpg';
-            const photoRef = storageRef.child(`recipes/${recipeId}/${photoId}.${extension}`);
-
-            // Upload with timeout to prevent hanging
-            const UPLOAD_TIMEOUT = 15000; // 15 seconds per photo
-            const uploadPromise = new Promise(async (resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    reject(new Error('Upload timed out'));
-                }, UPLOAD_TIMEOUT);
-
-                try {
-                    const uploadTask = photoRef.put(blob, {
-                        contentType: mimeType,
-                        cacheControl: 'public, max-age=31536000'
-                    });
-
-                    const snapshot = await uploadTask;
-                    clearTimeout(timeoutId);
-                    const downloadURL = await snapshot.ref.getDownloadURL();
-                    resolve(downloadURL);
-                } catch (err) {
-                    clearTimeout(timeoutId);
-                    reject(err);
-                }
-            });
-
-            const downloadURL = await uploadPromise;
-            console.log('Photo uploaded successfully:', downloadURL);
-            return downloadURL;
-        } catch (error) {
-            console.error('Error uploading photo to Firebase Storage:', error);
-            // Throw error instead of returning base64 to prevent localStorage overflow
-            throw error;
-        }
-    }
-
-    /**
-     * Download a photo from Firebase Storage (or return if already a data URL)
+     * Get photo URL - handles both data URLs and Firebase Storage URLs
      * @param {string} photoUrl - Firebase Storage URL or data URL
-     * @returns {Promise<string>} - Data URL of the photo
+     * @returns {string} - URL for display
      */
-    async function downloadPhotoFromStorage(photoUrl) {
-        // If it's already a data URL, return it
-        if (photoUrl && photoUrl.startsWith('data:')) {
-            return photoUrl;
-        }
-
-        // If it's a Firebase Storage URL, it can be used directly
-        // We'll keep the URL as-is for display, no need to convert to base64
+    function getPhotoUrl(photoUrl) {
+        // Both data URLs and Firebase Storage URLs can be used directly
         return photoUrl;
-    }
-
-    /**
-     * Delete a photo from Firebase Storage
-     * @param {string} photoUrl - Firebase Storage URL to delete
-     */
-    async function deletePhotoFromStorage(photoUrl) {
-        if (!useCloud || !storage || !photoUrl || photoUrl.startsWith('data:')) {
-            return; // Not a storage URL or storage not available
-        }
-
-        try {
-            const storageRef = storage.refFromURL(photoUrl);
-            await storageRef.delete();
-            console.log('Photo deleted from storage:', photoUrl);
-        } catch (error) {
-            console.warn('Error deleting photo from storage:', error);
-            // Not critical if delete fails
-        }
     }
 
     function processCookbookPhoto() {
@@ -4058,97 +3970,6 @@
             reader.onerror = reject;
             reader.readAsDataURL(file);
         });
-    }
-
-    // ============================================
-    // Photo Migration
-    // ============================================
-
-    /**
-     * Migrate existing base64 photos to Firebase Storage
-     * This runs once in the background to move photos from localStorage to cloud
-     */
-    async function migratePhotosToStorage() {
-        if (!useCloud || !storage) {
-            return; // Cloud storage not available
-        }
-
-        try {
-            const recipes = getRecipes();
-            let migrationCount = 0;
-            const migrationKey = 'ivys_photo_migration_done';
-
-            // Check if migration already completed
-            const migrationDone = localStorage.getItem(migrationKey);
-            if (migrationDone === 'true') {
-                return; // Already migrated
-            }
-
-            console.log('Starting photo migration to Firebase Storage...');
-
-            for (const recipe of recipes) {
-                let recipeUpdated = false;
-
-                // Migrate cover image if it's a data URL
-                if (recipe.image && recipe.image.startsWith('data:')) {
-                    try {
-                        const storageUrl = await uploadPhotoToStorage(recipe.image, recipe.id, 'cover');
-                        if (!storageUrl.startsWith('data:')) {
-                            recipe.image = storageUrl;
-                            recipeUpdated = true;
-                            migrationCount++;
-                        }
-                    } catch (error) {
-                        console.warn('Failed to migrate cover image for recipe:', recipe.id, error);
-                    }
-                }
-
-                // Migrate recipe photos if they're data URLs
-                if (recipe.photos && Array.isArray(recipe.photos) && recipe.photos.length > 0) {
-                    const migratedPhotos = await Promise.all(
-                        recipe.photos.map(async (photo, index) => {
-                            if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                                try {
-                                    const photoId = `photo-${index}-${Date.now()}`;
-                                    const storageUrl = await uploadPhotoToStorage(photo.dataUrl, recipe.id, photoId);
-                                    if (!storageUrl.startsWith('data:')) {
-                                        migrationCount++;
-                                        return {
-                                            ...photo,
-                                            dataUrl: storageUrl,
-                                            storageUrl: storageUrl
-                                        };
-                                    }
-                                } catch (error) {
-                                    console.warn('Failed to migrate photo for recipe:', recipe.id, error);
-                                }
-                            }
-                            return photo;
-                        })
-                    );
-
-                    if (JSON.stringify(migratedPhotos) !== JSON.stringify(recipe.photos)) {
-                        recipe.photos = migratedPhotos;
-                        recipeUpdated = true;
-                    }
-                }
-
-                // Update recipe if any photos were migrated
-                if (recipeUpdated) {
-                    updateRecipe(recipe.id, recipe);
-                }
-            }
-
-            if (migrationCount > 0) {
-                console.log(`Migration complete: ${migrationCount} photos uploaded to cloud storage`);
-                showToast(`${migrationCount} photos backed up to cloud!`);
-            }
-
-            // Mark migration as complete
-            localStorage.setItem(migrationKey, 'true');
-        } catch (error) {
-            console.error('Error during photo migration:', error);
-        }
     }
 
     // ============================================
