@@ -926,7 +926,11 @@ h1, h2, h3, h4 {
     height: auto !important;
 }
 
-.full-page-recipe .modal {
+.full-page-recipe .modal[hidden] {
+    display: none !important;
+}
+
+.full-page-recipe .modal:not([hidden]) {
     position: static !important;
     inset: auto !important;
     display: block !important;
