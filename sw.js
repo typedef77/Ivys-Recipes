@@ -1,6 +1,6 @@
 // Ivy's Recipes - Service Worker
 // Uses stale-while-revalidate for app files to ensure updates are always fetched
-const CACHE_NAME = 'ivys-recipes-v31';
+const CACHE_NAME = 'ivys-recipes-v32';
 
 // Core app files that should use stale-while-revalidate strategy
 const APP_FILES = [

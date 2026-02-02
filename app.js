@@ -1836,69 +1836,8 @@
         try {
             const recipeId = id || generateId();
 
-            // Upload photos to Firebase Storage if available
-            if (recipe.photos && recipe.photos.length > 0) {
-                if (useCloud && storage) {
-                    showToast('Uploading photos to cloud...');
-
-                    // Upload each photo sequentially for better error handling
-                    const uploadedPhotos = [];
-                    for (let index = 0; index < recipe.photos.length; index++) {
-                        const photo = recipe.photos[index];
-                        if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
-                            const photoId = `photo-${index}-${Date.now()}`;
-                            try {
-                                const url = await uploadPhotoToStorage(photo.dataUrl, recipeId, photoId);
-                                // Only keep the storage URL, remove base64 data to save localStorage space
-                                if (url && !url.startsWith('data:')) {
-                                    uploadedPhotos.push({
-                                        dataUrl: url,
-                                        storageUrl: url
-                                    });
-                                } else {
-                                    // Upload returned base64 (failed), skip this photo for localStorage
-                                    console.warn('Photo upload returned base64, skipping for storage');
-                                    uploadedPhotos.push({ dataUrl: url, storageUrl: url });
-                                }
-                            } catch (uploadError) {
-                                console.warn('Photo upload failed:', uploadError);
-                                // Skip failed photos to avoid localStorage quota issues
-                                showToast('Some photos could not be uploaded');
-                            }
-                        } else {
-                            uploadedPhotos.push(photo);
-                        }
-                    }
-                    recipe.photos = uploadedPhotos;
-                } else {
-                    // No cloud storage - warn user about potential storage issues
-                    console.warn('Cloud storage not available, cookbook photos may not save properly');
-                    showToast('Cloud storage not available. Photos may not save.');
-                    // Clear photos to avoid localStorage quota issues
-                    recipe.photos = [];
-                }
-            }
-
-            // Upload cover image to Firebase Storage if it's a data URL
-            if (recipe.image && recipe.image.startsWith('data:')) {
-                if (useCloud && storage) {
-                    try {
-                        const coverImageUrl = await uploadPhotoToStorage(recipe.image, recipeId, 'cover');
-                        if (coverImageUrl && !coverImageUrl.startsWith('data:')) {
-                            recipe.image = coverImageUrl;
-                        } else {
-                            // Upload failed, clear the image to avoid localStorage issues
-                            recipe.image = '';
-                        }
-                    } catch (coverError) {
-                        console.warn('Cover image upload failed:', coverError);
-                        recipe.image = '';
-                    }
-                } else {
-                    // No cloud storage, clear large base64 image
-                    recipe.image = '';
-                }
-            }
+            // Photos are already compressed, store them directly
+            // No need to upload to Firebase Storage - they sync with recipe data
 
             if (id) {
                 updateRecipe(id, recipe);
@@ -2381,6 +2320,64 @@
         setTimeout(() => {
             elements.toast.hidden = true;
         }, 3000);
+    }
+
+    /**
+     * Compress an image file to a smaller size
+     * @param {File|Blob} file - The image file to compress
+     * @param {Object} options - Compression options
+     * @param {number} options.maxWidth - Maximum width in pixels (default: 800)
+     * @param {number} options.quality - JPEG quality 0-1 (default: 0.75)
+     * @returns {Promise<string>} - Compressed image as base64 data URL
+     */
+    function compressImage(file, options = {}) {
+        const maxWidth = options.maxWidth || 800;
+        const quality = options.quality || 0.75;
+
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            img.onload = () => {
+                // Calculate new dimensions
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                // Draw to canvas
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to compressed JPEG
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedDataUrl);
+            };
+
+            img.onerror = () => {
+                reject(new Error('Failed to load image'));
+            };
+
+            // Load image from file
+            if (file instanceof File || file instanceof Blob) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            } else if (typeof file === 'string') {
+                // Already a data URL
+                img.src = file;
+            } else {
+                reject(new Error('Invalid input: expected File, Blob, or data URL string'));
+            }
+        });
     }
 
     // ============================================
@@ -3172,17 +3169,19 @@
             });
         }
         if (elements.recipeImageFile) {
-            elements.recipeImageFile.addEventListener('change', (e) => {
+            elements.recipeImageFile.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (file && file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const dataUrl = event.target.result;
-                        document.getElementById('recipe-image').value = dataUrl;
-                        elements.imagePreview.style.backgroundImage = `url(${dataUrl})`;
+                    try {
+                        // Compress cover image before storing
+                        const compressedDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
+                        document.getElementById('recipe-image').value = compressedDataUrl;
+                        elements.imagePreview.style.backgroundImage = `url(${compressedDataUrl})`;
                         elements.imagePreview.hidden = false;
-                    };
-                    reader.readAsDataURL(file);
+                    } catch (err) {
+                        console.error('Error compressing image:', err);
+                        showToast('Error processing image');
+                    }
                 }
             });
         }
@@ -3198,19 +3197,21 @@
                 editPhotoUpload.click();
             });
 
-            editPhotoUpload.addEventListener('change', (e) => {
+            editPhotoUpload.addEventListener('change', async (e) => {
                 const files = Array.from(e.target.files);
-                files.forEach(file => {
+                for (const file of files) {
                     if (file && file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const dataUrl = event.target.result;
-                            editPendingPhotos.push({ dataUrl, file });
+                        try {
+                            // Compress image before storing
+                            const compressedDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
+                            editPendingPhotos.push({ dataUrl: compressedDataUrl });
                             renderEditPhotosPreview();
-                        };
-                        reader.readAsDataURL(file);
+                        } catch (err) {
+                            console.error('Error compressing image:', err);
+                            showToast('Error processing image');
+                        }
                     }
-                });
+                }
                 e.target.value = ''; // Reset file input
             });
         }
@@ -3359,15 +3360,16 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // Convert to data URL for preview
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    pendingUploadDataUrl = event.target.result;
+                try {
+                    // Compress image before storing
+                    pendingUploadDataUrl = await compressImage(file, { maxWidth: 800, quality: 0.75 });
                     uploadPreview.style.backgroundImage = `url(${pendingUploadDataUrl})`;
                     uploadPreviewContainer.hidden = false;
                     setAsCoverLabel.hidden = false;
-                };
-                reader.readAsDataURL(file);
+                } catch (err) {
+                    console.error('Error compressing image:', err);
+                    showToast('Error processing image');
+                }
                 e.target.value = ''; // Reset file input
             });
         }
@@ -3382,21 +3384,8 @@
 
                 try {
                     const recipe = currentViewingRecipe;
-                    let imageUrl = pendingUploadDataUrl;
-
-                    // Try to upload to Firebase Storage if available
-                    if (useCloud && storage) {
-                        try {
-                            const photoId = `photo-${Date.now()}`;
-                            const uploadedUrl = await uploadPhotoToStorage(pendingUploadDataUrl, recipe.id, photoId);
-                            if (uploadedUrl && !uploadedUrl.startsWith('data:')) {
-                                imageUrl = uploadedUrl;
-                            }
-                        } catch (uploadError) {
-                            console.warn('Cloud upload failed, saving locally:', uploadError);
-                            // Continue with data URL - will be saved locally
-                        }
-                    }
+                    // Image is already compressed, store directly
+                    const imageUrl = pendingUploadDataUrl;
 
                     // Update recipe
                     const updates = {};
@@ -3406,7 +3395,7 @@
                     } else {
                         // Add to photos array
                         const photos = recipe.photos || [];
-                        photos.push({ dataUrl: imageUrl, storageUrl: imageUrl });
+                        photos.push({ dataUrl: imageUrl });
                         updates.photos = photos;
                     }
 
@@ -4196,10 +4185,7 @@
                 await loadFromCloud();
             }
 
-            // Migrate existing photos to cloud storage (runs in background)
-            setTimeout(() => {
-                migratePhotosToStorage();
-            }, 2000); // Wait 2 seconds after load to avoid blocking UI
+            // Photo migration disabled - photos now stored as compressed base64 directly with recipe data
         } else {
             // Firebase failed to initialize, show offline status
             initCloudSyncButton();
