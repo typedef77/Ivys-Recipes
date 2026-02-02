@@ -921,9 +921,10 @@ h1, h2, h3, h4 {
 }
 
 .full-page-recipe {
-    background-color: var(--color-background);
+    background-color: var(--color-surface);
     overflow: auto !important;
     height: auto !important;
+    min-height: 100vh;
 }
 
 .full-page-recipe .modal[hidden] {
@@ -935,39 +936,49 @@ h1, h2, h3, h4 {
     inset: auto !important;
     display: block !important;
     height: auto !important;
+    min-height: 100vh;
     overflow: visible !important;
     padding: 0 !important;
     z-index: auto !important;
     align-items: stretch !important;
     justify-content: stretch !important;
+    background-color: var(--color-surface);
 }
 
 .full-page-recipe .modal-content {
     position: static !important;
-    max-width: 900px;
-    width: 100%;
+    max-width: 100% !important;
+    width: 100% !important;
     max-height: none !important;
     height: auto !important;
-    margin: 0 auto;
-    border-radius: 0;
-    box-shadow: none;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     background-color: var(--color-surface);
     overflow: visible !important;
 }
 
 .full-page-recipe .modal-view-content {
-    max-width: 900px;
+    max-width: 100% !important;
 }
 
 .full-page-recipe .modal-header {
-    position: relative;
+    position: sticky;
+    top: 0;
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border-light);
-    padding: 1.5rem 2rem;
+    padding: 1rem 2rem;
+    z-index: 100;
+}
+
+.full-page-recipe .modal-header h2 {
+    font-size: 1.75rem;
 }
 
 .full-page-recipe .modal-body {
     padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
     background-color: var(--color-surface);
 }
 
@@ -978,18 +989,21 @@ h1, h2, h3, h4 {
 
 .full-page-recipe .view-image {
     border-radius: var(--radius-lg);
-    min-height: 300px;
+    min-height: 250px;
+    max-width: 600px;
 }
 
 @media (min-width: 768px) {
-    .full-page-recipe .modal-content {
-        margin: 2rem auto;
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-lg);
+    .full-page-recipe .modal-header {
+        padding: 1.5rem 3rem;
+    }
+
+    .full-page-recipe .modal-body {
+        padding: 2rem 3rem;
     }
 
     .full-page-recipe .view-image {
-        min-height: 400px;
+        min-height: 350px;
     }
 }
 
@@ -1001,25 +1015,32 @@ h1, h2, h3, h4 {
 @media (min-width: 768px) {
     .full-page-recipe .view-recipe-columns {
         display: grid;
-        grid-template-columns: 1fr 1.5fr;
-        gap: 2rem;
+        grid-template-columns: minmax(280px, 350px) 1fr;
+        gap: 3rem;
         align-items: start;
     }
 
     .full-page-recipe .view-column-left {
         position: sticky;
-        top: 1rem;
+        top: 5rem; /* Account for sticky header */
     }
 
     .full-page-recipe .view-column-right {
         border-left: 1px solid var(--color-border-light);
-        padding-left: 2rem;
+        padding-left: 3rem;
+    }
+
+    .full-page-recipe .view-column-left h3,
+    .full-page-recipe .view-column-right h3 {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+        color: var(--color-secondary);
     }
 }
 
 @media (min-width: 1024px) {
     .full-page-recipe .view-recipe-columns {
-        grid-template-columns: 350px 1fr;
+        grid-template-columns: 380px 1fr;
     }
 }
 
