@@ -1363,9 +1363,11 @@ h1, h2, h3, h4 {
 .full-page-recipe .view-image {
     border-radius: var(--radius-lg);
     min-height: 250px;
+    width: 100%;
     max-width: 600px;
     margin-left: auto;
     margin-right: auto;
+    display: block;
 }
 
 @media (min-width: 768px) {
@@ -2691,9 +2693,21 @@ h1, h2, h3, h4 {
 
 .sidebar-section.collapsed .sidebar-tags,
 .sidebar-section.collapsed #sidebar-folders,
+.sidebar-section.collapsed #sidebar-meal-plans,
 .sidebar-section.collapsed .sidebar-item-add,
 .sidebar-section.collapsed .sidebar-section-content:not(:first-child) {
     display: none;
+}
+
+/* Small Empty State (for modals) */
+.empty-state-small {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--color-text-muted);
+}
+
+.empty-state-small p {
+    margin-bottom: 1rem;
 }
 
 /* See All / See Less toggle button styling */
