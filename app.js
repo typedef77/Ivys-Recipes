@@ -946,7 +946,26 @@
         btnInstall: document.getElementById('btn-install'),
         btnCloudSync: document.getElementById('btn-cloud-sync'),
         importFile: document.getElementById('import-file'),
-        bookmarkletDrag: document.getElementById('bookmarklet-drag')
+        bookmarkletDrag: document.getElementById('bookmarklet-drag'),
+        // View toggle
+        btnGridView: document.getElementById('btn-grid-view'),
+        btnListView: document.getElementById('btn-list-view'),
+        // Time filter
+        btnTimeFilter: document.getElementById('btn-time-filter'),
+        timeFilterDropdown: document.getElementById('time-filter-dropdown'),
+        timeFilterLabel: document.getElementById('time-filter-label'),
+        // Bulk selection
+        btnBulkSelect: document.getElementById('btn-bulk-select'),
+        bulkActionsBar: document.getElementById('bulk-actions-bar'),
+        btnSelectAll: document.getElementById('btn-select-all'),
+        bulkSelectedCount: document.getElementById('bulk-selected-count'),
+        btnBulkAddFolder: document.getElementById('btn-bulk-add-folder'),
+        btnBulkDelete: document.getElementById('btn-bulk-delete'),
+        btnBulkCancel: document.getElementById('btn-bulk-cancel'),
+        bulkFolderDropdown: document.getElementById('bulk-folder-dropdown'),
+        bulkFolderList: document.getElementById('bulk-folder-list'),
+        btnBulkNewFolder: document.getElementById('btn-bulk-new-folder'),
+        btnCloseBulkFolder: document.getElementById('btn-close-bulk-folder')
     };
 
     // Track open card menus
@@ -960,6 +979,50 @@
     let isCookbookMode = false;
     let currentPhotoIndex = 0;
     let currentPhotosArray = [];
+
+    // View and filter state
+    let currentViewMode = 'grid'; // 'grid' or 'list'
+    let currentTimeFilter = 'all'; // 'all', '30', '60', '90', '120'
+    let bulkSelectMode = false;
+    let selectedRecipes = new Set();
+
+    // ============================================
+    // Time Parsing Utility
+    // ============================================
+
+    function parseTimeToMinutes(timeStr) {
+        if (!timeStr) return null;
+        const str = timeStr.toLowerCase().trim();
+        let total = 0;
+
+        // Match hours
+        const hoursMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)/);
+        if (hoursMatch) {
+            total += parseFloat(hoursMatch[1]) * 60;
+        }
+
+        // Match minutes
+        const minsMatch = str.match(/(\d+)\s*(?:minutes?|mins?|m(?!onths?))/);
+        if (minsMatch) {
+            total += parseInt(minsMatch[1], 10);
+        }
+
+        // If just a number, assume minutes
+        if (total === 0) {
+            const numMatch = str.match(/^(\d+)$/);
+            if (numMatch) {
+                total = parseInt(numMatch[1], 10);
+            }
+        }
+
+        return total > 0 ? total : null;
+    }
+
+    function getTotalTime(recipe) {
+        const prepMins = parseTimeToMinutes(recipe.prepTime) || 0;
+        const cookMins = parseTimeToMinutes(recipe.cookTime) || 0;
+        return prepMins + cookMins;
+    }
 
     // ============================================
     // Rendering Functions
@@ -1022,6 +1085,21 @@
             });
         }
 
+        // Apply time filter
+        if (currentTimeFilter !== 'all') {
+            const maxMinutes = parseInt(currentTimeFilter, 10);
+            filtered = filtered.filter(r => {
+                const totalTime = getTotalTime(r);
+                // Include recipes with time info that's under the limit
+                // Also include recipes without time info if they have at least one time field
+                if (totalTime === 0) {
+                    // No time info - exclude from time-filtered results
+                    return false;
+                }
+                return totalTime <= maxMinutes;
+            });
+        }
+
         elements.countAll.textContent = recipes.length;
 
         let titleText = 'All Recipes';
@@ -1043,6 +1121,12 @@
         elements.emptyState.hidden = true;
         elements.noResults.hidden = true;
 
+        // Apply view mode class
+        elements.recipeGrid.classList.toggle('list-view', currentViewMode === 'list');
+
+        // Apply bulk select mode class
+        elements.recipeGrid.classList.toggle('bulk-select-mode', bulkSelectMode);
+
         if (recipes.length === 0) {
             elements.emptyState.hidden = false;
             return;
@@ -1056,6 +1140,9 @@
         filtered.forEach(recipe => {
             elements.recipeGrid.appendChild(createRecipeCard(recipe));
         });
+
+        // Update bulk selection UI
+        updateBulkSelectionUI();
     }
 
     function createRecipeCard(recipe) {
@@ -1122,7 +1209,17 @@
             `;
         }
 
+        const isSelected = selectedRecipes.has(recipe.id);
+        const checkboxHtml = `
+            <div class="recipe-card-checkbox ${isSelected ? 'checked' : ''}" data-action="toggle-select" title="Select recipe">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+        `;
+
         const overlayButtons = `
+            ${checkboxHtml}
             <div class="card-overlay-buttons">
                 <button class="card-btn card-btn-favorite ${isFavorite}" data-action="favorite" title="Favorite">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="${recipe.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
@@ -1229,10 +1326,13 @@
                 } else if (action === 'delete') {
                     closeAllCardMenus();
                     if (confirm('Are you sure you want to delete this recipe?')) {
-                        deleteRecipeById(recipeId);
-                        renderRecipes();
-                        renderTagsFilter();
-                        showToast('Recipe deleted');
+                        // Properly await delete and cloud sync
+                        (async () => {
+                            await deleteRecipeById(recipeId);
+                            renderRecipes();
+                            renderTagsFilter();
+                            renderFolders();
+                        })();
                     }
                 } else if (action === 'toggle-folder') {
                     closeAllCardMenus();
@@ -1269,8 +1369,16 @@
                     const tagsContainer = btn.closest('.recipe-card-tags');
                     const allTags = currentRecipe.tags || [];
                     tagsContainer.innerHTML = allTags.map(t => `<span class="recipe-card-tag">${escapeHtml(t)}</span>`).join('');
+                } else if (action === 'toggle-select') {
+                    toggleRecipeSelection(recipeId, card);
                 }
             } else {
+                // In bulk select mode, clicking anywhere toggles selection
+                if (bulkSelectMode) {
+                    e.preventDefault();
+                    toggleRecipeSelection(recipeId, card);
+                    return;
+                }
                 // Normal click opens modal, prevent link navigation
                 e.preventDefault();
                 openViewModal(recipeId);
@@ -2775,6 +2883,200 @@
     }
 
     // ============================================
+    // View Mode Functions
+    // ============================================
+
+    function setViewMode(mode) {
+        currentViewMode = mode;
+        elements.btnGridView.classList.toggle('active', mode === 'grid');
+        elements.btnListView.classList.toggle('active', mode === 'list');
+        elements.recipeGrid.classList.toggle('list-view', mode === 'list');
+        // Save preference
+        localStorage.setItem('ivys_view_mode', mode);
+    }
+
+    function loadViewModePreference() {
+        const saved = localStorage.getItem('ivys_view_mode');
+        if (saved === 'list' || saved === 'grid') {
+            setViewMode(saved);
+        }
+    }
+
+    // ============================================
+    // Time Filter Functions
+    // ============================================
+
+    function setTimeFilter(value) {
+        currentTimeFilter = value;
+
+        // Update active state on options
+        document.querySelectorAll('.time-filter-option').forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.time === value);
+        });
+
+        // Update button state and label
+        if (elements.btnTimeFilter) {
+            elements.btnTimeFilter.classList.toggle('active', value !== 'all');
+        }
+        if (elements.timeFilterLabel) {
+            if (value === 'all') {
+                elements.timeFilterLabel.hidden = true;
+            } else {
+                const labels = { '30': '<30m', '60': '<1h', '90': '<1.5h', '120': '<2h' };
+                elements.timeFilterLabel.textContent = labels[value] || '';
+                elements.timeFilterLabel.hidden = false;
+            }
+        }
+
+        renderRecipes();
+    }
+
+    // ============================================
+    // Bulk Selection Functions
+    // ============================================
+
+    function enterBulkSelectMode() {
+        bulkSelectMode = true;
+        selectedRecipes.clear();
+        elements.btnBulkSelect.classList.add('active');
+        elements.bulkActionsBar.hidden = false;
+        elements.recipeGrid.classList.add('bulk-select-mode');
+        updateBulkSelectionUI();
+    }
+
+    function exitBulkSelectMode() {
+        bulkSelectMode = false;
+        selectedRecipes.clear();
+        elements.btnBulkSelect.classList.remove('active');
+        elements.bulkActionsBar.hidden = true;
+        elements.bulkFolderDropdown.hidden = true;
+        elements.recipeGrid.classList.remove('bulk-select-mode');
+
+        // Remove selection state from cards
+        document.querySelectorAll('.recipe-card.selected').forEach(card => {
+            card.classList.remove('selected');
+        });
+        document.querySelectorAll('.recipe-card-checkbox.checked').forEach(cb => {
+            cb.classList.remove('checked');
+        });
+    }
+
+    function toggleRecipeSelection(recipeId, card) {
+        if (selectedRecipes.has(recipeId)) {
+            selectedRecipes.delete(recipeId);
+            card.classList.remove('selected');
+            card.querySelector('.recipe-card-checkbox')?.classList.remove('checked');
+        } else {
+            selectedRecipes.add(recipeId);
+            card.classList.add('selected');
+            card.querySelector('.recipe-card-checkbox')?.classList.add('checked');
+        }
+        updateBulkSelectionUI();
+    }
+
+    function toggleSelectAll() {
+        const visibleCards = document.querySelectorAll('.recipe-card');
+        const allSelected = visibleCards.length > 0 && selectedRecipes.size === visibleCards.length;
+
+        if (allSelected) {
+            // Deselect all
+            selectedRecipes.clear();
+            visibleCards.forEach(card => {
+                card.classList.remove('selected');
+                card.querySelector('.recipe-card-checkbox')?.classList.remove('checked');
+            });
+            elements.btnSelectAll.textContent = 'Select All';
+        } else {
+            // Select all visible
+            visibleCards.forEach(card => {
+                const id = card.dataset.id;
+                selectedRecipes.add(id);
+                card.classList.add('selected');
+                card.querySelector('.recipe-card-checkbox')?.classList.add('checked');
+            });
+            elements.btnSelectAll.textContent = 'Deselect All';
+        }
+        updateBulkSelectionUI();
+    }
+
+    function updateBulkSelectionUI() {
+        if (!bulkSelectMode) return;
+
+        const count = selectedRecipes.size;
+        elements.bulkSelectedCount.textContent = `${count} selected`;
+
+        // Enable/disable bulk action buttons
+        const hasSelection = count > 0;
+        elements.btnBulkDelete.disabled = !hasSelection;
+        elements.btnBulkAddFolder.disabled = !hasSelection;
+
+        // Update select all button text
+        const visibleCards = document.querySelectorAll('.recipe-card');
+        const allSelected = visibleCards.length > 0 && count === visibleCards.length;
+        elements.btnSelectAll.textContent = allSelected ? 'Deselect All' : 'Select All';
+    }
+
+    async function handleBulkDelete() {
+        const count = selectedRecipes.size;
+        if (count === 0) return;
+
+        if (!confirm(`Delete ${count} recipe${count !== 1 ? 's' : ''}? This cannot be undone.`)) {
+            return;
+        }
+
+        const idsToDelete = Array.from(selectedRecipes);
+        showToast(`Deleting ${count} recipe${count !== 1 ? 's' : ''}...`);
+
+        for (const id of idsToDelete) {
+            await deleteRecipeById(id);
+        }
+
+        exitBulkSelectMode();
+        renderRecipes();
+        renderTagsFilter();
+        renderFolders();
+        showToast(`Deleted ${count} recipe${count !== 1 ? 's' : ''}`);
+    }
+
+    function populateBulkFolderList() {
+        const folders = getFolders().filter(f => f.name !== SUGGESTED_FOLDER_NAME);
+
+        elements.bulkFolderList.innerHTML = folders.map(folder => `
+            <button class="dropdown-item" data-folder-id="${folder.id}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                ${escapeHtml(folder.name)}
+            </button>
+        `).join('');
+
+        if (folders.length === 0) {
+            elements.bulkFolderList.innerHTML = '<p style="padding: 0.75rem; color: var(--color-text-muted); font-size: 0.875rem;">No folders yet</p>';
+        }
+    }
+
+    function addSelectedRecipesToFolder(folderId) {
+        const recipes = getRecipes();
+        let addedCount = 0;
+
+        selectedRecipes.forEach(recipeId => {
+            const recipe = recipes.find(r => r.id === recipeId);
+            if (recipe) {
+                if (!recipe.folders) recipe.folders = [];
+                if (!recipe.folders.includes(folderId)) {
+                    recipe.folders.push(folderId);
+                    addedCount++;
+                }
+            }
+        });
+
+        if (addedCount > 0) {
+            saveRecipes(recipes);
+            renderRecipes();
+        }
+    }
+
+    // ============================================
     // Event Listeners
     // ============================================
 
@@ -3187,13 +3489,14 @@
             }
         });
 
-        document.getElementById('btn-delete-recipe').addEventListener('click', () => {
+        document.getElementById('btn-delete-recipe').addEventListener('click', async () => {
             if (currentViewingRecipe && confirm('Delete this recipe?')) {
-                deleteRecipeById(currentViewingRecipe.id);
+                const recipeId = currentViewingRecipe.id;
                 closeModal(elements.modalView);
+                await deleteRecipeById(recipeId);
                 renderRecipes();
                 renderTagsFilter();
-                showToast('Recipe deleted');
+                renderFolders();
             }
         });
 
@@ -3402,6 +3705,11 @@
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                // Exit bulk select mode first
+                if (bulkSelectMode) {
+                    exitBulkSelectMode();
+                    return;
+                }
                 if (!elements.photoLightbox.hidden) {
                     closeLightbox();
                 } else {
@@ -3419,6 +3727,118 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
                 elements.headerSearch.focus();
+            }
+        });
+
+        // View toggle (Grid/List)
+        if (elements.btnGridView) {
+            elements.btnGridView.addEventListener('click', () => {
+                setViewMode('grid');
+            });
+        }
+        if (elements.btnListView) {
+            elements.btnListView.addEventListener('click', () => {
+                setViewMode('list');
+            });
+        }
+
+        // Time filter
+        if (elements.btnTimeFilter) {
+            elements.btnTimeFilter.addEventListener('click', (e) => {
+                e.stopPropagation();
+                elements.timeFilterDropdown.hidden = !elements.timeFilterDropdown.hidden;
+                // Close other dropdowns
+                elements.addRecipeDropdown.hidden = true;
+                elements.dropdownMenu.hidden = true;
+                if (elements.bulkFolderDropdown) elements.bulkFolderDropdown.hidden = true;
+            });
+        }
+        if (elements.timeFilterDropdown) {
+            elements.timeFilterDropdown.addEventListener('click', (e) => {
+                const option = e.target.closest('.time-filter-option');
+                if (option) {
+                    const timeValue = option.dataset.time;
+                    setTimeFilter(timeValue);
+                    elements.timeFilterDropdown.hidden = true;
+                }
+            });
+        }
+
+        // Close time filter dropdown when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (elements.timeFilterDropdown && !elements.timeFilterDropdown.hidden) {
+                if (!e.target.closest('.time-filter-container')) {
+                    elements.timeFilterDropdown.hidden = true;
+                }
+            }
+        });
+
+        // Bulk selection toggle
+        if (elements.btnBulkSelect) {
+            elements.btnBulkSelect.addEventListener('click', () => {
+                if (bulkSelectMode) {
+                    exitBulkSelectMode();
+                } else {
+                    enterBulkSelectMode();
+                }
+            });
+        }
+
+        // Bulk actions
+        if (elements.btnSelectAll) {
+            elements.btnSelectAll.addEventListener('click', toggleSelectAll);
+        }
+        if (elements.btnBulkCancel) {
+            elements.btnBulkCancel.addEventListener('click', exitBulkSelectMode);
+        }
+        if (elements.btnBulkDelete) {
+            elements.btnBulkDelete.addEventListener('click', handleBulkDelete);
+        }
+        if (elements.btnBulkAddFolder) {
+            elements.btnBulkAddFolder.addEventListener('click', (e) => {
+                e.stopPropagation();
+                populateBulkFolderList();
+                elements.bulkFolderDropdown.hidden = false;
+            });
+        }
+        if (elements.btnCloseBulkFolder) {
+            elements.btnCloseBulkFolder.addEventListener('click', () => {
+                elements.bulkFolderDropdown.hidden = true;
+            });
+        }
+        if (elements.btnBulkNewFolder) {
+            elements.btnBulkNewFolder.addEventListener('click', () => {
+                const folderName = prompt('Enter folder name:');
+                if (folderName && folderName.trim()) {
+                    const folder = addFolder(folderName.trim());
+                    if (folder) {
+                        addSelectedRecipesToFolder(folder.id);
+                        elements.bulkFolderDropdown.hidden = true;
+                        renderFolders();
+                        showToast(`Added ${selectedRecipes.size} recipe(s) to "${folder.name}"`);
+                    }
+                }
+            });
+        }
+        if (elements.bulkFolderList) {
+            elements.bulkFolderList.addEventListener('click', (e) => {
+                const item = e.target.closest('.dropdown-item');
+                if (item && item.dataset.folderId) {
+                    addSelectedRecipesToFolder(item.dataset.folderId);
+                    elements.bulkFolderDropdown.hidden = true;
+                    const folder = getFolders().find(f => f.id === item.dataset.folderId);
+                    renderFolders();
+                    showToast(`Added ${selectedRecipes.size} recipe(s) to "${folder?.name || 'folder'}"`);
+                }
+            });
+        }
+
+        // Close bulk folder dropdown when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (elements.bulkFolderDropdown && !elements.bulkFolderDropdown.hidden) {
+                if (!e.target.closest('.bulk-folder-dropdown') && !e.target.closest('#btn-bulk-add-folder')) {
+                    elements.bulkFolderDropdown.hidden = true;
+                }
             }
         });
     }
@@ -3986,6 +4406,7 @@
         setupBookmarklet();
         setupAuthOverlay();
         setupCollapsibleSections();
+        loadViewModePreference();
         checkUrlParams();
         handleSharedFiles();
         registerServiceWorker();

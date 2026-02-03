@@ -256,8 +256,140 @@
             <!-- Main Content -->
             <main class="main-content">
                 <div class="content-header">
-                    <h2 class="content-title" id="content-title">All Recipes</h2>
-                    <span class="recipe-count" id="recipe-count">0 recipes</span>
+                    <div class="content-header-left">
+                        <h2 class="content-title" id="content-title">All Recipes</h2>
+                        <span class="recipe-count" id="recipe-count">0 recipes</span>
+                    </div>
+                    <div class="content-header-right">
+                        <!-- Time Filter Dropdown -->
+                        <div class="time-filter-container">
+                            <button id="btn-time-filter" class="btn btn-icon" aria-label="Filter by time" title="Filter by cook time">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <span id="time-filter-label" class="time-filter-label" hidden></span>
+                            </button>
+                            <div id="time-filter-dropdown" class="dropdown-menu time-filter-dropdown" hidden>
+                                <button class="dropdown-item time-filter-option active" data-time="all">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                    </svg>
+                                    All times
+                                </button>
+                                <button class="dropdown-item time-filter-option" data-time="30">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    Under 30 min
+                                </button>
+                                <button class="dropdown-item time-filter-option" data-time="60">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    Under 1 hour
+                                </button>
+                                <button class="dropdown-item time-filter-option" data-time="90">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    Under 1.5 hours
+                                </button>
+                                <button class="dropdown-item time-filter-option" data-time="120">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    Under 2 hours
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Bulk Selection Toggle -->
+                        <button id="btn-bulk-select" class="btn btn-icon" aria-label="Select multiple" title="Select multiple recipes">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                                <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                                <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                                <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                            </svg>
+                        </button>
+                        <!-- View Toggle -->
+                        <div class="view-toggle">
+                            <button id="btn-grid-view" class="btn btn-icon active" aria-label="Grid view" title="Grid view">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                </svg>
+                            </button>
+                            <button id="btn-list-view" class="btn btn-icon" aria-label="List view" title="List view">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Bar (hidden by default) -->
+                <div id="bulk-actions-bar" class="bulk-actions-bar" hidden>
+                    <div class="bulk-actions-left">
+                        <button id="btn-select-all" class="btn btn-secondary btn-sm">Select All</button>
+                        <span id="bulk-selected-count">0 selected</span>
+                    </div>
+                    <div class="bulk-actions-right">
+                        <button id="btn-bulk-add-folder" class="btn btn-secondary btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <line x1="9" y1="14" x2="15" y2="14"></line>
+                            </svg>
+                            Add to Folder
+                        </button>
+                        <button id="btn-bulk-delete" class="btn btn-danger btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete
+                        </button>
+                        <button id="btn-bulk-cancel" class="btn btn-icon" aria-label="Cancel selection">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bulk Folder Selection Dropdown -->
+                <div id="bulk-folder-dropdown" class="bulk-folder-dropdown" hidden>
+                    <div class="bulk-folder-header">
+                        <span>Add to folder</span>
+                        <button id="btn-close-bulk-folder" class="btn btn-icon btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="bulk-folder-list" class="bulk-folder-list">
+                        <!-- Folders populated by JS -->
+                    </div>
+                    <button id="btn-bulk-new-folder" class="dropdown-item bulk-folder-new">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Create new folder
+                    </button>
                 </div>
 
                 <div id="recipe-grid" class="recipe-grid">
