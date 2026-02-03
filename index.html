@@ -245,6 +245,20 @@
                     </button>
                 </div>
 
+                <div class="sidebar-section" id="meal-planning-section">
+                    <div class="sidebar-section-label">Meal Planning</div>
+                    <div id="sidebar-meal-plans">
+                        <!-- Meal plans will be populated by JS -->
+                    </div>
+                    <button class="sidebar-item sidebar-item-add" id="btn-add-meal-plan">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        New Week Plan
+                    </button>
+                </div>
+
                 <div class="sidebar-section" id="categories-section">
                     <div class="sidebar-section-label">Categories</div>
                     <div class="sidebar-tags" id="sidebar-tags">
@@ -310,10 +324,8 @@
                         <!-- Bulk Selection Toggle -->
                         <button id="btn-bulk-select" class="btn btn-icon" aria-label="Select multiple" title="Select multiple recipes">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-                                <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-                                <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-                                <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                                <polyline points="9 11 12 14 22 4"></polyline>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
                             </svg>
                         </button>
                         <!-- View Toggle -->
