@@ -499,6 +499,55 @@
         elements.sidebarMealPlans.innerHTML = html;
     }
 
+    function openMealPlanModal(recipeId) {
+        if (!elements.modalMealPlan) return;
+
+        elements.mealPlanRecipeId.value = recipeId;
+
+        const mealPlans = getMealPlans();
+
+        // Populate meal plan dropdown
+        if (mealPlans.length === 0) {
+            elements.mealPlanSelect.hidden = true;
+            elements.mealPlanDay.parentElement.hidden = true;
+            elements.noMealPlansMsg.hidden = false;
+            elements.btnAddToMealPlan.disabled = true;
+        } else {
+            elements.mealPlanSelect.hidden = false;
+            elements.mealPlanDay.parentElement.hidden = false;
+            elements.noMealPlansMsg.hidden = true;
+            elements.btnAddToMealPlan.disabled = false;
+
+            elements.mealPlanSelect.innerHTML = '<option value="">Choose a meal plan...</option>' +
+                mealPlans.map(plan => `<option value="${plan.id}">${escapeHtml(plan.name)}</option>`).join('');
+        }
+
+        openModal(elements.modalMealPlan);
+    }
+
+    function addRecipeToMealPlan(recipeId, planId, day) {
+        const mealPlans = getMealPlans();
+        const plan = mealPlans.find(p => p.id === planId);
+
+        if (!plan) return false;
+
+        if (!plan.days[day]) {
+            plan.days[day] = [];
+        }
+
+        // Check if already added
+        if (plan.days[day].includes(recipeId)) {
+            showToast('Recipe already in this day');
+            return false;
+        }
+
+        plan.days[day].push(recipeId);
+        plan.updatedAt = new Date().toISOString();
+        saveMealPlans(mealPlans);
+        renderMealPlans();
+        return true;
+    }
+
     async function saveRecipes(recipes, successMessage = null) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
@@ -612,7 +661,7 @@
         }
 
         const filtered = recipes.filter(r => r.id !== id);
-        saveRecipes(filtered, 'Recipe deleted');
+        await saveRecipes(filtered, 'Recipe deleted');
     }
 
     function getRecipeById(id) {
@@ -1108,7 +1157,15 @@
         // Meal Planning
         sidebarMealPlans: document.getElementById('sidebar-meal-plans'),
         btnAddMealPlan: document.getElementById('btn-add-meal-plan'),
-        mealPlanningSection: document.getElementById('meal-planning-section')
+        mealPlanningSection: document.getElementById('meal-planning-section'),
+        // Meal Plan Modal
+        modalMealPlan: document.getElementById('modal-meal-plan'),
+        mealPlanRecipeId: document.getElementById('meal-plan-recipe-id'),
+        mealPlanSelect: document.getElementById('meal-plan-select'),
+        mealPlanDay: document.getElementById('meal-plan-day'),
+        noMealPlansMsg: document.getElementById('no-meal-plans-msg'),
+        btnAddToMealPlan: document.getElementById('btn-add-to-meal-plan'),
+        btnCreateMealPlanModal: document.getElementById('btn-create-meal-plan-modal')
     };
 
     // Track open card menus
@@ -1358,6 +1415,16 @@
                     Add to new folder...
                 </button>
                 <div class="card-dropdown-divider"></div>
+                <button class="card-dropdown-item" data-action="add-to-meal-plan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    Add to Meal Plan...
+                </button>
+                <div class="card-dropdown-divider"></div>
                 <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -1522,6 +1589,9 @@
                             showToast('Folder already exists');
                         }
                     }
+                } else if (action === 'add-to-meal-plan') {
+                    closeAllCardMenus();
+                    openMealPlanModal(recipeId);
                 } else if (action === 'show-more-tags') {
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
@@ -3536,6 +3606,47 @@
             });
         }
 
+        // Meal Plan Modal - Add to meal plan button
+        if (elements.btnAddToMealPlan) {
+            elements.btnAddToMealPlan.addEventListener('click', () => {
+                const recipeId = elements.mealPlanRecipeId.value;
+                const planId = elements.mealPlanSelect.value;
+                const day = elements.mealPlanDay.value;
+
+                if (!planId) {
+                    showToast('Please select a meal plan');
+                    return;
+                }
+
+                if (addRecipeToMealPlan(recipeId, planId, day)) {
+                    const plan = getMealPlans().find(p => p.id === planId);
+                    const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                    showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
+                    closeModal(elements.modalMealPlan);
+                }
+            });
+        }
+
+        // Meal Plan Modal - Create new plan button
+        if (elements.btnCreateMealPlanModal) {
+            elements.btnCreateMealPlanModal.addEventListener('click', () => {
+                const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
+                if (planName && planName.trim()) {
+                    const plan = addMealPlan(planName.trim());
+                    if (plan) {
+                        renderMealPlans();
+                        // Refresh the modal
+                        const recipeId = elements.mealPlanRecipeId.value;
+                        openMealPlanModal(recipeId);
+                        elements.mealPlanSelect.value = plan.id;
+                        showToast(`Created meal plan "${plan.name}"`);
+                    } else {
+                        showToast('Meal plan with that name already exists');
+                    }
+                }
+            });
+        }
+
         // Close card menus when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.card-menu-container')) {
@@ -4403,6 +4514,7 @@
     function setupCollapsibleSections() {
         const foldersLabel = document.querySelector('#folders-section .sidebar-section-label');
         const categoriesLabel = document.querySelector('#categories-section .sidebar-section-label');
+        const mealPlanningLabel = document.querySelector('#meal-planning-section .sidebar-section-label');
 
         if (foldersLabel) {
             foldersLabel.classList.add('collapsible-header');
@@ -4415,6 +4527,20 @@
             foldersLabel.addEventListener('click', () => toggleSection('folders'));
             if (collapsedSections.folders) {
                 document.getElementById('folders-section').classList.add('collapsed');
+            }
+        }
+
+        if (mealPlanningLabel) {
+            mealPlanningLabel.classList.add('collapsible-header');
+            mealPlanningLabel.innerHTML = `
+                <span>Meal Planning</span>
+                <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            `;
+            mealPlanningLabel.addEventListener('click', () => toggleSection('meal-planning'));
+            if (collapsedSections['meal-planning']) {
+                document.getElementById('meal-planning-section').classList.add('collapsed');
             }
         }
 
