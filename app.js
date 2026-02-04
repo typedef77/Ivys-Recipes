@@ -1178,7 +1178,12 @@
         // Meal Plan Header Actions
         mealPlanActions: document.getElementById('meal-plan-actions'),
         btnRenameMealPlan: document.getElementById('btn-rename-meal-plan'),
-        btnCopyIngredients: document.getElementById('btn-copy-ingredients')
+        btnCopyIngredients: document.getElementById('btn-copy-ingredients'),
+        // Ingredients Modal
+        modalIngredients: document.getElementById('modal-ingredients'),
+        ingredientsModalTitle: document.getElementById('ingredients-modal-title'),
+        ingredientsListTextarea: document.getElementById('ingredients-list-textarea'),
+        btnCopyIngredientsModal: document.getElementById('btn-copy-ingredients-modal')
     };
 
     // Track open card menus
@@ -1473,15 +1478,7 @@
                     Add to new folder...
                 </button>
                 <div class="card-dropdown-divider"></div>
-                <button class="card-dropdown-item" data-action="add-to-meal-plan">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    Add to Meal Plan...
-                </button>
+                ${generateMealPlanSubmenu(recipe.id)}
                 <div class="card-dropdown-divider"></div>
                 <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1647,9 +1644,27 @@
                             showToast('Folder already exists');
                         }
                     }
-                } else if (action === 'add-to-meal-plan') {
+                } else if (action === 'add-to-day') {
+                    const planId = btn.dataset.planId;
+                    const day = btn.dataset.day;
+                    if (addRecipeToMealPlan(recipeId, planId, day)) {
+                        const plan = getMealPlans().find(p => p.id === planId);
+                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                        showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
+                    }
                     closeAllCardMenus();
-                    openMealPlanModal(recipeId);
+                } else if (action === 'create-meal-plan') {
+                    closeAllCardMenus();
+                    const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
+                    if (planName && planName.trim()) {
+                        const plan = addMealPlan(planName.trim());
+                        if (plan) {
+                            renderMealPlans();
+                            showToast(`Created "${plan.name}" - click menu again to add recipe`);
+                        } else {
+                            showToast('Meal plan with that name already exists');
+                        }
+                    }
                 } else if (action === 'show-more-tags') {
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
@@ -3469,7 +3484,7 @@
         return true;
     }
 
-    function copyMealPlanIngredients(planId) {
+    function showIngredientsModal(planId) {
         const mealPlans = getMealPlans();
         const plan = mealPlans.find(p => p.id === planId);
         if (!plan) return;
@@ -3482,7 +3497,7 @@
         dayOrder.forEach(day => {
             const dayRecipes = plan.days[day] || [];
             if (dayRecipes.length > 0) {
-                allIngredients.push(`\n=== ${dayNames[day]} ===`);
+                allIngredients.push(`=== ${dayNames[day]} ===`);
                 dayRecipes.forEach(recipeId => {
                     const recipe = recipes.find(r => r.id === recipeId);
                     if (recipe) {
@@ -3492,21 +3507,117 @@
                         }
                     }
                 });
+                allIngredients.push(''); // Empty line between days
             }
         });
 
         const ingredientsText = allIngredients.join('\n').trim();
 
-        if (ingredientsText) {
-            navigator.clipboard.writeText(ingredientsText).then(() => {
+        if (!ingredientsText) {
+            showToast('No ingredients - add recipes to your meal plan first');
+            return;
+        }
+
+        // Update modal
+        if (elements.ingredientsModalTitle) {
+            elements.ingredientsModalTitle.textContent = `Ingredients: ${plan.name}`;
+        }
+        if (elements.ingredientsListTextarea) {
+            elements.ingredientsListTextarea.value = ingredientsText;
+        }
+
+        // Show modal
+        openModal(elements.modalIngredients);
+    }
+
+    function copyIngredientsFromModal() {
+        const text = elements.ingredientsListTextarea?.value || '';
+        if (text) {
+            navigator.clipboard.writeText(text).then(() => {
                 showToast('Ingredients copied to clipboard!');
             }).catch(() => {
-                // Fallback: show in alert
-                alert(ingredientsText);
+                // Select all text as fallback
+                elements.ingredientsListTextarea.select();
+                showToast('Press Ctrl+C to copy');
             });
-        } else {
-            showToast('No ingredients to copy');
         }
+    }
+
+    function generateMealPlanSubmenu(recipeId) {
+        const mealPlans = getMealPlans();
+        const days = [
+            { key: 'monday', label: 'Mon' },
+            { key: 'tuesday', label: 'Tue' },
+            { key: 'wednesday', label: 'Wed' },
+            { key: 'thursday', label: 'Thu' },
+            { key: 'friday', label: 'Fri' },
+            { key: 'saturday', label: 'Sat' },
+            { key: 'sunday', label: 'Sun' }
+        ];
+
+        if (mealPlans.length === 0) {
+            return `
+                <div class="card-meal-plan-section">
+                    <div class="card-dropdown-item card-meal-plan-header">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        Add to Meal Plan
+                    </div>
+                    <div class="card-meal-plan-empty">
+                        <p>No meal plans yet</p>
+                        <button class="card-dropdown-item" data-action="create-meal-plan" data-recipe-id="${recipeId}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Create Meal Plan
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="card-meal-plan-section">
+                <div class="card-dropdown-item card-meal-plan-header">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    Add to Meal Plan
+                </div>
+                ${mealPlans.map(plan => `
+                    <div class="card-meal-plan-item">
+                        <div class="card-meal-plan-name">${escapeHtml(plan.name)}</div>
+                        <div class="card-meal-plan-days">
+                            ${days.map(d => `
+                                <button class="card-meal-plan-day-btn"
+                                        data-action="add-to-day"
+                                        data-recipe-id="${recipeId}"
+                                        data-plan-id="${plan.id}"
+                                        data-day="${d.key}"
+                                        title="${d.key.charAt(0).toUpperCase() + d.key.slice(1)}">
+                                    ${d.label}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+                <button class="card-dropdown-item card-meal-plan-new" data-action="create-meal-plan" data-recipe-id="${recipeId}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New meal plan...
+                </button>
+            </div>
+        `;
     }
 
     function renderMealPlanWeeklyView(plan) {
@@ -4586,8 +4697,13 @@
             elements.btnCopyIngredients.addEventListener('click', () => {
                 if (!currentFilter.startsWith('mealplan:')) return;
                 const planId = currentFilter.replace('mealplan:', '');
-                copyMealPlanIngredients(planId);
+                showIngredientsModal(planId);
             });
+        }
+
+        // Ingredients modal copy button
+        if (elements.btnCopyIngredientsModal) {
+            elements.btnCopyIngredientsModal.addEventListener('click', copyIngredientsFromModal);
         }
 
         // Set up meal plan drag and drop
