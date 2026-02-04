@@ -1374,7 +1374,8 @@
             sourceName = getSourceName(recipe.source);
         }
 
-        const folders = getFolders();
+        // Filter out Suggested Recipes folder - Ivy shouldn't manually add recipes there
+        const folders = getFolders().filter(f => f.name !== SUGGESTED_FOLDER_NAME);
         const recipeFolders = recipe.folders || [];
         const folderOptions = folders.map(f => {
             const isInFolder = recipeFolders.includes(f.id);
@@ -1812,7 +1813,8 @@
     function populateViewFolderList() {
         if (!elements.viewFolderList || !currentViewingRecipe) return;
 
-        const folders = getFolders();
+        // Filter out Suggested Recipes folder - Ivy shouldn't manually add recipes there
+        const folders = getFolders().filter(f => f.name !== SUGGESTED_FOLDER_NAME);
         const recipeFolders = currentViewingRecipe.folders || [];
 
         elements.viewFolderList.innerHTML = folders.map(folder => {
@@ -4475,7 +4477,7 @@
 
     function dismissRecipe(recipeId) {
         if (confirm('Are you sure you want to dismiss this recipe suggestion? This will delete it.')) {
-            deleteRecipe(recipeId);
+            deleteRecipeById(recipeId);
             showToast('Suggestion dismissed');
 
             // Update the suggestions modal
