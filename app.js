@@ -410,7 +410,7 @@
         }
     }
 
-    function addMealPlan(name) {
+    async function addMealPlan(name) {
         const mealPlans = getMealPlans();
         if (mealPlans.some(mp => mp.name.toLowerCase() === name.toLowerCase())) {
             return null;
@@ -431,7 +431,7 @@
             }
         };
         mealPlans.unshift(newPlan);
-        saveMealPlans(mealPlans);
+        await saveMealPlans(mealPlans);
         return newPlan;
     }
 
@@ -1760,7 +1760,7 @@
             </a>
         `;
 
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
             const btn = e.target.closest('[data-action]');
             const link = e.target.closest('[data-recipe-link]');
             const recipeId = recipe.id;
@@ -1839,7 +1839,7 @@
                     const targetRecipeId = btn.dataset.recipeId;
                     const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
                     if (planName && planName.trim()) {
-                        const plan = addMealPlan(planName.trim());
+                        const plan = await addMealPlan(planName.trim());
                         if (plan) {
                             renderMealPlans();
                             // Ask which day to add
@@ -3826,10 +3826,10 @@
 
         // Meal Planning - Add new meal plan
         if (elements.btnAddMealPlan) {
-            elements.btnAddMealPlan.addEventListener('click', () => {
+            elements.btnAddMealPlan.addEventListener('click', async () => {
                 const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
                 if (planName && planName.trim()) {
-                    const plan = addMealPlan(planName.trim());
+                    const plan = await addMealPlan(planName.trim());
                     if (plan) {
                         renderMealPlans();
                         showToast(`Created meal plan "${plan.name}"`);
@@ -3929,10 +3929,10 @@
 
         // Meal Plan Modal - Create new plan button
         if (elements.btnCreateMealPlanModal) {
-            elements.btnCreateMealPlanModal.addEventListener('click', () => {
+            elements.btnCreateMealPlanModal.addEventListener('click', async () => {
                 const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
                 if (planName && planName.trim()) {
-                    const plan = addMealPlan(planName.trim());
+                    const plan = await addMealPlan(planName.trim());
                     if (plan) {
                         renderMealPlans();
                         // Refresh the modal
