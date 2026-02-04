@@ -1640,23 +1640,15 @@
                     Add to new folder...
                 </button>
                 <div class="card-dropdown-divider"></div>
-                <div class="card-dropdown-submenu-container" data-submenu="meal-plan">
-                    <button class="card-dropdown-item has-submenu">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                        Add to Meal Plan
-                        <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </button>
-                    <div class="card-dropdown-submenu meal-plan-submenu" data-recipe-id="${recipe.id}">
-                        <!-- Will be populated dynamically -->
-                    </div>
-                </div>
+                <button class="card-dropdown-item" data-action="add-to-meal-plan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    Add to Meal Plan...
+                </button>
                 <div class="card-dropdown-divider"></div>
                 <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1760,7 +1752,7 @@
             </a>
         `;
 
-        card.addEventListener('click', async (e) => {
+        card.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
             const link = e.target.closest('[data-recipe-link]');
             const recipeId = recipe.id;
@@ -1822,44 +1814,9 @@
                             showToast('Folder already exists');
                         }
                     }
-                } else if (action === 'add-to-day') {
-                    // Add recipe to specific day in meal plan
+                } else if (action === 'add-to-meal-plan') {
                     closeAllCardMenus();
-                    const planId = btn.dataset.planId;
-                    const day = btn.dataset.day;
-                    const targetRecipeId = btn.dataset.recipeId;
-                    if (addRecipeToMealPlan(targetRecipeId, planId, day)) {
-                        const plan = getMealPlans().find(p => p.id === planId);
-                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
-                        showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
-                    }
-                } else if (action === 'create-meal-plan') {
-                    // Create new meal plan from submenu
-                    closeAllCardMenus();
-                    const targetRecipeId = btn.dataset.recipeId;
-                    const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
-                    if (planName && planName.trim()) {
-                        const plan = await addMealPlan(planName.trim());
-                        if (plan) {
-                            renderMealPlans();
-                            // Ask which day to add
-                            const dayChoice = prompt('Which day? (monday/tuesday/wednesday/thursday/friday/saturday/sunday):');
-                            if (dayChoice && dayChoice.trim()) {
-                                const day = dayChoice.trim().toLowerCase();
-                                if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].includes(day)) {
-                                    addRecipeToMealPlan(targetRecipeId, plan.id, day);
-                                    const dayName = day.charAt(0).toUpperCase() + day.slice(1);
-                                    showToast(`Created "${plan.name}" and added recipe to ${dayName}`);
-                                } else {
-                                    showToast(`Created "${plan.name}"`);
-                                }
-                            } else {
-                                showToast(`Created "${plan.name}"`);
-                            }
-                        } else {
-                            showToast('Meal plan with that name already exists');
-                        }
-                    }
+                    openMealPlanModal(recipeId);
                 } else if (action === 'show-more-tags') {
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
@@ -1892,11 +1849,6 @@
         if (!wasOpen) {
             dropdown.hidden = false;
             openCardMenu = dropdown;
-            // Populate meal plan submenu
-            const mealPlanSubmenu = dropdown.querySelector('.meal-plan-submenu');
-            if (mealPlanSubmenu) {
-                populateMealPlanSubmenu(mealPlanSubmenu);
-            }
         }
     }
 
