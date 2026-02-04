@@ -537,6 +537,12 @@ h1, h2, h3, h4 {
     display: flex;
     align-items: center;
     gap: 0.375rem;
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.75rem;
+}
+
+.meal-plan-actions .btn svg {
+    flex-shrink: 0;
 }
 
 /* Bulk day select in dropdown */
@@ -546,12 +552,14 @@ h1, h2, h3, h4 {
     gap: 0.5rem;
     padding: 0.75rem;
     border-top: 1px solid var(--color-border-light);
-    background: var(--color-cream);
+    background: rgba(123, 153, 113, 0.06);
 }
 
 .bulk-day-select label {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-secondary);
+    white-space: nowrap;
 }
 
 .bulk-day-select select {
@@ -560,46 +568,65 @@ h1, h2, h3, h4 {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     font-size: 0.875rem;
+    background: white;
+}
+
+.bulk-day-select .btn {
+    white-space: nowrap;
 }
 
 /* Weekly Meal Plan View */
 .meal-plan-weekly-view {
     display: grid;
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .meal-plan-weekly-view {
+        grid-template-columns: 1fr;
+    }
 }
 
 .meal-plan-day {
     background: var(--color-surface);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg, var(--radius-md));
     border: 1px solid var(--color-border);
     overflow: hidden;
+    transition: box-shadow var(--transition);
+}
+
+.meal-plan-day:hover {
+    box-shadow: var(--shadow-sm);
 }
 
 .meal-plan-day-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: var(--color-cream);
-    border-bottom: 1px solid var(--color-border-light);
+    padding: 0.625rem 1rem;
+    background: var(--color-primary);
+    color: white;
 }
 
 .meal-plan-day-name {
     font-weight: 600;
-    color: var(--color-secondary);
+    font-size: 0.9375rem;
+    color: white;
 }
 
 .meal-plan-day-count {
-    font-size: 0.8125rem;
-    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .meal-plan-day-recipes {
-    padding: 0.75rem;
+    padding: 0.5rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    min-height: 60px;
+    gap: 0.375rem;
+    min-height: 64px;
+    transition: background var(--transition), border-color var(--transition);
 }
 
 .meal-plan-day-recipes.empty {
@@ -607,44 +634,81 @@ h1, h2, h3, h4 {
     align-items: center;
     justify-content: center;
     color: var(--color-text-muted);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     font-style: italic;
+    border: 2px dashed var(--color-border-light);
+    border-radius: var(--radius-sm);
+    margin: 0.5rem;
 }
 
 .meal-plan-day-recipes.drag-over {
-    background: var(--color-cream);
-    border: 2px dashed var(--color-primary);
+    background: rgba(123, 153, 113, 0.08);
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
 }
 
 .meal-plan-recipe-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     padding: 0.5rem;
     background: white;
     border-radius: var(--radius-sm);
     border: 1px solid var(--color-border-light);
-    cursor: grab;
+    cursor: pointer;
     transition: all var(--transition);
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .meal-plan-recipe-item:hover {
     border-color: var(--color-primary);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .meal-plan-recipe-item.dragging {
-    opacity: 0.5;
+    opacity: 0.3;
+    border-style: dashed;
+    cursor: grabbing;
+}
+
+.meal-plan-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    color: var(--color-text-muted);
+    cursor: grab;
+    flex-shrink: 0;
+    opacity: 0.4;
+    transition: opacity var(--transition), color var(--transition);
+    touch-action: none;
+}
+
+.meal-plan-recipe-item:hover .meal-plan-drag-handle {
+    opacity: 1;
+    color: var(--color-primary);
+}
+
+.meal-plan-drag-handle:active {
     cursor: grabbing;
 }
 
 .meal-plan-recipe-image {
-    width: 50px;
-    height: 50px;
+    width: 44px;
+    height: 44px;
     border-radius: var(--radius-sm);
     object-fit: cover;
     background: var(--color-cream);
     flex-shrink: 0;
+    pointer-events: none;
+}
+
+.meal-plan-recipe-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .meal-plan-recipe-info {
@@ -654,6 +718,7 @@ h1, h2, h3, h4 {
 
 .meal-plan-recipe-name {
     font-weight: 500;
+    font-size: 0.875rem;
     color: var(--color-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -663,10 +728,11 @@ h1, h2, h3, h4 {
 .meal-plan-recipe-meta {
     font-size: 0.75rem;
     color: var(--color-text-muted);
+    margin-top: 0.125rem;
 }
 
 .meal-plan-recipe-remove {
-    padding: 0.375rem;
+    padding: 0.25rem;
     border: none;
     background: none;
     color: var(--color-text-muted);
@@ -674,6 +740,7 @@ h1, h2, h3, h4 {
     border-radius: var(--radius-sm);
     opacity: 0;
     transition: all var(--transition);
+    flex-shrink: 0;
 }
 
 .meal-plan-recipe-item:hover .meal-plan-recipe-remove {
@@ -682,7 +749,14 @@ h1, h2, h3, h4 {
 
 .meal-plan-recipe-remove:hover {
     color: var(--color-danger);
-    background: var(--color-cream);
+    background: rgba(220, 53, 69, 0.08);
+}
+
+/* Touch drag ghost */
+.touch-drag-ghost {
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--color-primary);
+    background: white;
 }
 
 /* View Toggle */
@@ -1220,30 +1294,40 @@ h1, h2, h3, h4 {
 /* Card Meal Plan Inline Menu */
 .card-meal-plan-section {
     padding: 0.25rem 0;
+    border-top: 1px solid var(--color-border-light);
+    margin-top: 0.125rem;
 }
 
 .card-meal-plan-header {
     pointer-events: none;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-text-muted);
-    font-size: 0.8125rem;
-    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.card-meal-plan-header svg {
+    width: 14px;
+    height: 14px;
 }
 
 .card-meal-plan-empty {
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.75rem;
 }
 
 .card-meal-plan-empty p {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     color: var(--color-text-muted);
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0;
     margin: 0;
 }
 
 .card-meal-plan-item {
-    padding: 0.375rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     border-radius: var(--radius-sm);
+    margin: 0 0.25rem;
 }
 
 .card-meal-plan-item:hover {
@@ -1252,40 +1336,56 @@ h1, h2, h3, h4 {
 
 .card-meal-plan-name {
     font-size: 0.8125rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--color-secondary);
     margin-bottom: 0.375rem;
 }
 
 .card-meal-plan-days {
     display: flex;
-    gap: 0.25rem;
+    gap: 3px;
 }
 
 .card-meal-plan-day-btn {
     flex: 1;
-    padding: 0.375rem 0.25rem;
+    padding: 0.3125rem 0.125rem;
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-weight: 600;
     text-transform: uppercase;
-    background: var(--color-cream);
-    border: 1px solid var(--color-border);
+    letter-spacing: 0.02em;
+    background: white;
+    border: 1.5px solid var(--color-border);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all var(--transition);
+    transition: all 0.15s ease;
     color: var(--color-text-muted);
+    text-align: center;
+    line-height: 1;
 }
 
 .card-meal-plan-day-btn:hover {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(123, 153, 113, 0.3);
+}
+
+.card-meal-plan-day-btn:active {
+    transform: translateY(0);
 }
 
 .card-meal-plan-new {
     font-size: 0.8125rem;
-    color: var(--color-accent);
+    color: var(--color-primary);
+    font-weight: 500;
     margin-top: 0.25rem;
+    padding: 0.375rem 0.75rem;
+}
+
+.card-meal-plan-new:hover {
+    background: var(--color-cream);
+    color: var(--color-secondary);
 }
 
 /* View modal folder menu */
@@ -2632,6 +2732,20 @@ h1, h2, h3, h4 {
     .content-header-right {
         width: 100%;
         justify-content: flex-end;
+    }
+
+    /* Meal plan actions mobile */
+    .meal-plan-actions {
+        margin-left: 0;
+        margin-top: 0.5rem;
+    }
+
+    .meal-plan-recipe-remove {
+        opacity: 1;
+    }
+
+    .meal-plan-drag-handle {
+        opacity: 0.7;
     }
 }
 
