@@ -565,7 +565,7 @@ h1, h2, h3, h4 {
 /* Weekly Meal Plan View */
 .meal-plan-weekly-view {
     display: grid;
-    gap: 1rem;
+    gap: 1.5rem;
 }
 
 .meal-plan-day {
@@ -596,10 +596,10 @@ h1, h2, h3, h4 {
 
 .meal-plan-day-recipes {
     padding: 0.75rem;
-    min-height: 60px;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-height: 60px;
 }
 
 .meal-plan-day-recipes.empty {
@@ -2414,6 +2414,12 @@ h1, h2, h3, h4 {
     .header-search {
         max-width: 250px;
     }
+}
+
+/* Mobile search elements - hidden by default on desktop */
+.mobile-search-backdrop,
+.mobile-search-popup {
+    display: none;
 }
 
 @media (max-width: 768px) {
