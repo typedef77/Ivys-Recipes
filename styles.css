@@ -522,6 +522,169 @@ h1, h2, h3, h4 {
     color: var(--color-text-muted);
 }
 
+/* Meal Plan Actions */
+.meal-plan-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: 1rem;
+}
+
+.meal-plan-actions[hidden] {
+    display: none;
+}
+
+.meal-plan-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+/* Bulk day select in dropdown */
+.bulk-day-select {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 1px solid var(--color-border-light);
+    background: var(--color-cream);
+}
+
+.bulk-day-select label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.bulk-day-select select {
+    flex: 1;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+/* Weekly Meal Plan View */
+.meal-plan-weekly-view {
+    display: grid;
+    gap: 1rem;
+}
+
+.meal-plan-day {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+}
+
+.meal-plan-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: var(--color-cream);
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.meal-plan-day-name {
+    font-weight: 600;
+    color: var(--color-secondary);
+}
+
+.meal-plan-day-count {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+}
+
+.meal-plan-day-recipes {
+    padding: 0.75rem;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.meal-plan-day-recipes.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.meal-plan-day-recipes.drag-over {
+    background: var(--color-cream);
+    border: 2px dashed var(--color-primary);
+}
+
+.meal-plan-recipe-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-light);
+    cursor: grab;
+    transition: all var(--transition);
+}
+
+.meal-plan-recipe-item:hover {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.meal-plan-recipe-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.meal-plan-recipe-image {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--color-cream);
+    flex-shrink: 0;
+}
+
+.meal-plan-recipe-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.meal-plan-recipe-name {
+    font-weight: 500;
+    color: var(--color-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.meal-plan-recipe-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.meal-plan-recipe-remove {
+    padding: 0.375rem;
+    border: none;
+    background: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: all var(--transition);
+}
+
+.meal-plan-recipe-item:hover .meal-plan-recipe-remove {
+    opacity: 1;
+}
+
+.meal-plan-recipe-remove:hover {
+    color: var(--color-danger);
+    background: var(--color-cream);
+}
+
 /* View Toggle */
 .view-toggle {
     display: flex;

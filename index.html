@@ -273,6 +273,23 @@
                     <div class="content-header-left">
                         <h2 class="content-title" id="content-title">All Recipes</h2>
                         <span class="recipe-count" id="recipe-count">0 recipes</span>
+                        <!-- Meal Plan Actions (shown when viewing meal plan) -->
+                        <div id="meal-plan-actions" class="meal-plan-actions" hidden>
+                            <button id="btn-rename-meal-plan" class="btn btn-sm btn-secondary" title="Rename">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                Rename
+                            </button>
+                            <button id="btn-copy-ingredients" class="btn btn-sm btn-primary" title="Copy all ingredients">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                See Ingredients
+                            </button>
+                        </div>
                     </div>
                     <div class="content-header-right">
                         <!-- Time Filter Dropdown -->
@@ -367,6 +384,15 @@
                             </svg>
                             Add to Folder
                         </button>
+                        <button id="btn-bulk-add-meal-plan" class="btn btn-secondary btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            Add to Meal Plan
+                        </button>
                         <button id="btn-bulk-delete" class="btn btn-danger btn-sm">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -401,6 +427,41 @@
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                         Create new folder
+                    </button>
+                </div>
+
+                <!-- Bulk Meal Plan Selection Dropdown -->
+                <div id="bulk-meal-plan-dropdown" class="bulk-folder-dropdown" hidden>
+                    <div class="bulk-folder-header">
+                        <span>Add to meal plan</span>
+                        <button id="btn-close-bulk-meal-plan" class="btn btn-icon btn-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6 6 18M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="bulk-meal-plan-list" class="bulk-folder-list">
+                        <!-- Meal plans populated by JS -->
+                    </div>
+                    <div class="bulk-day-select" id="bulk-day-select" hidden>
+                        <label>Select day:</label>
+                        <select id="bulk-meal-plan-day">
+                            <option value="monday">Monday</option>
+                            <option value="tuesday">Tuesday</option>
+                            <option value="wednesday">Wednesday</option>
+                            <option value="thursday">Thursday</option>
+                            <option value="friday">Friday</option>
+                            <option value="saturday">Saturday</option>
+                            <option value="sunday">Sunday</option>
+                        </select>
+                        <button id="btn-bulk-add-to-day" class="btn btn-primary btn-sm">Add</button>
+                    </div>
+                    <button id="btn-bulk-new-meal-plan" class="dropdown-item bulk-folder-new">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Create new meal plan
                     </button>
                 </div>
 
