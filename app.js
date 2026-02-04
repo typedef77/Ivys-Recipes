@@ -548,6 +548,57 @@
         return true;
     }
 
+    function populateMealPlanSubmenu(submenu) {
+        const recipeId = submenu.dataset.recipeId;
+        const mealPlans = getMealPlans();
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+        let html = '';
+
+        if (mealPlans.length > 0) {
+            html += `<div class="submenu-section-label">Add to plan</div>`;
+            mealPlans.forEach(plan => {
+                html += `
+                    <div class="submenu-item-container">
+                        <button class="submenu-item has-submenu" data-plan-id="${plan.id}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            ${escapeHtml(plan.name)}
+                            <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                        <div class="days-submenu">
+                            ${days.map((day, i) => `
+                                <button class="submenu-item" data-action="add-to-day" data-plan-id="${plan.id}" data-day="${day}" data-recipe-id="${recipeId}">
+                                    ${dayLabels[i]}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            html += `<div class="card-dropdown-divider"></div>`;
+        }
+
+        html += `
+            <button class="submenu-item create-new" data-action="create-meal-plan" data-recipe-id="${recipeId}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create new plan...
+            </button>
+        `;
+
+        submenu.innerHTML = html;
+    }
+
     async function saveRecipes(recipes, successMessage = null) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(recipes));
@@ -1062,6 +1113,9 @@
         countAll: document.getElementById('count-all'),
         contentTitle: document.getElementById('content-title'),
         recipeCount: document.getElementById('recipe-count'),
+        mealPlanActions: document.getElementById('meal-plan-actions'),
+        btnRenameMealPlan: document.getElementById('btn-rename-meal-plan'),
+        btnCopyIngredients: document.getElementById('btn-copy-ingredients'),
         btnAddFolder: document.getElementById('btn-add-folder'),
         // Collapsible section headers
         foldersSection: document.getElementById('folders-section'),
@@ -1333,9 +1387,25 @@
         elements.contentTitle.textContent = titleText;
         elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
+        // Show/hide meal plan actions
+        const isViewingMealPlan = currentFilter.startsWith('mealplan:');
+        if (elements.mealPlanActions) {
+            elements.mealPlanActions.hidden = !isViewingMealPlan;
+        }
+
         elements.recipeGrid.innerHTML = '';
         elements.emptyState.hidden = true;
         elements.noResults.hidden = true;
+
+        // If viewing a meal plan, render weekly view
+        if (isViewingMealPlan) {
+            const planId = currentFilter.replace('mealplan:', '');
+            renderMealPlanWeeklyView(planId);
+            return;
+        }
+
+        // Remove weekly view class if not viewing meal plan
+        elements.recipeGrid.classList.remove('meal-plan-weekly-view');
 
         // Apply view mode class
         elements.recipeGrid.classList.toggle('list-view', currentViewMode === 'list');
@@ -1359,6 +1429,160 @@
 
         // Update bulk selection UI
         updateBulkSelectionUI();
+    }
+
+    function renderMealPlanWeeklyView(planId) {
+        const plan = getMealPlans().find(p => p.id === planId);
+        if (!plan) return;
+
+        const recipes = getRecipes();
+        const days = [
+            { key: 'monday', label: 'Monday' },
+            { key: 'tuesday', label: 'Tuesday' },
+            { key: 'wednesday', label: 'Wednesday' },
+            { key: 'thursday', label: 'Thursday' },
+            { key: 'friday', label: 'Friday' },
+            { key: 'saturday', label: 'Saturday' },
+            { key: 'sunday', label: 'Sunday' }
+        ];
+
+        // Remove view mode classes for weekly view
+        elements.recipeGrid.classList.remove('list-view');
+        elements.recipeGrid.classList.add('meal-plan-weekly-view');
+
+        let html = '';
+        days.forEach(day => {
+            const dayRecipes = plan.days[day.key] || [];
+            html += `
+                <div class="meal-plan-day" data-day="${day.key}">
+                    <div class="meal-plan-day-header">
+                        <span class="meal-plan-day-name">${day.label}</span>
+                        <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="meal-plan-day-recipes ${dayRecipes.length === 0 ? 'empty' : ''}">
+            `;
+
+            if (dayRecipes.length === 0) {
+                html += `<span>No recipes planned</span>`;
+            } else {
+                dayRecipes.forEach(recipeId => {
+                    const recipe = recipes.find(r => r.id === recipeId);
+                    if (recipe) {
+                        const imageUrl = recipe.image || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTE2LjUgOS40IDcuNSA0LjIyIi8+PHBhdGggZD0iTTIxIDE2VjhhMiAyIDAgMCAwLTEtMS43M2wtNy00YTIgMiAwIDAgMC0yIDBsLTcgNEEyIDIgMCAwIDAgMyA4djhhMiAyIDAgMCAwIDEgMS43M2w3IDRhMiAyIDAgMCAwIDIgMGw3LTRBMiAyIDAgMCAwIDIxIDE2eiIvPjxwb2x5bGluZSBwb2ludHM9IjMuMjkgNyAxMiAxMiAyMC43MSA3Ii8+PGxpbmUgeDE9IjEyIiB5MT0iMjIiIHgyPSIxMiIgeTI9IjEyIi8+PC9zdmc+';
+                        let timeText = '';
+                        if (recipe.prepTime || recipe.cookTime) {
+                            const times = [];
+                            if (recipe.prepTime) times.push(`Prep: ${recipe.prepTime}`);
+                            if (recipe.cookTime) times.push(`Cook: ${recipe.cookTime}`);
+                            timeText = times.join(' • ');
+                        }
+                        html += `
+                            <div class="meal-plan-recipe-item" data-recipe-id="${recipe.id}" data-day="${day.key}" data-plan-id="${planId}">
+                                <img class="meal-plan-recipe-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(recipe.title)}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHBhdGggZD0iTTE2LjUgOS40IDcuNSA0LjIyIi8+PHBhdGggZD0iTTIxIDE2VjhhMiAyIDAgMCAwLTEtMS43M2wtNy00YTIgMiAwIDAgMC0yIDBsLTcgNEEyIDIgMCAwIDAgMyA4djhhMiAyIDAgMCAwIDEgMS43M2w3IDRhMiAyIDAgMCAwIDIgMGw3LTRBMiAyIDAgMCAwIDIxIDE2eiIvPjxwb2x5bGluZSBwb2ludHM9IjMuMjkgNyAxMiAxMiAyMC43MSA3Ii8+PGxpbmUgeDE9IjEyIiB5MT0iMjIiIHgyPSIxMiIgeTI9IjEyIi8+PC9zdmc+'">
+                                <div class="meal-plan-recipe-info">
+                                    <div class="meal-plan-recipe-name">${escapeHtml(recipe.title)}</div>
+                                    ${timeText ? `<div class="meal-plan-recipe-meta">${timeText}</div>` : ''}
+                                </div>
+                                <button class="meal-plan-recipe-remove" data-action="remove-from-day" title="Remove from ${day.label}">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 6 6 18M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        elements.recipeGrid.innerHTML = html;
+
+        // Add event listeners for the weekly view
+        elements.recipeGrid.querySelectorAll('.meal-plan-recipe-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                // Don't open recipe if clicking remove button
+                if (e.target.closest('.meal-plan-recipe-remove')) {
+                    const recipeId = item.dataset.recipeId;
+                    const day = item.dataset.day;
+                    const planId = item.dataset.planId;
+                    removeRecipeFromMealPlan(recipeId, planId, day);
+                    showToast('Removed from meal plan');
+                    return;
+                }
+                // Open recipe view
+                const recipeId = item.dataset.recipeId;
+                openViewModal(recipeId);
+            });
+        });
+    }
+
+    function removeRecipeFromMealPlan(recipeId, planId, day) {
+        const mealPlans = getMealPlans();
+        const plan = mealPlans.find(p => p.id === planId);
+        if (!plan || !plan.days[day]) return;
+
+        plan.days[day] = plan.days[day].filter(id => id !== recipeId);
+        plan.updatedAt = new Date().toISOString();
+        saveMealPlans(mealPlans);
+        renderMealPlans();
+        renderRecipes();
+    }
+
+    function copyMealPlanIngredients(planId) {
+        const plan = getMealPlans().find(p => p.id === planId);
+        if (!plan) return;
+
+        const recipes = getRecipes();
+        const days = [
+            { key: 'monday', label: 'Monday' },
+            { key: 'tuesday', label: 'Tuesday' },
+            { key: 'wednesday', label: 'Wednesday' },
+            { key: 'thursday', label: 'Thursday' },
+            { key: 'friday', label: 'Friday' },
+            { key: 'saturday', label: 'Saturday' },
+            { key: 'sunday', label: 'Sunday' }
+        ];
+
+        let ingredientsList = `📅 ${plan.name} - Ingredients\n\n`;
+
+        days.forEach(day => {
+            const dayRecipes = plan.days[day.key] || [];
+            if (dayRecipes.length > 0) {
+                ingredientsList += `━━━ ${day.label} ━━━\n\n`;
+
+                dayRecipes.forEach(recipeId => {
+                    const recipe = recipes.find(r => r.id === recipeId);
+                    if (recipe) {
+                        ingredientsList += `🍽️ ${recipe.title}\n`;
+                        if (recipe.ingredients && recipe.ingredients.trim()) {
+                            // Split ingredients by newline and format
+                            const ingredients = recipe.ingredients.split('\n').filter(i => i.trim());
+                            ingredients.forEach(ing => {
+                                ingredientsList += `   • ${ing.trim()}\n`;
+                            });
+                        } else {
+                            ingredientsList += `   (No ingredients listed)\n`;
+                        }
+                        ingredientsList += '\n';
+                    }
+                });
+            }
+        });
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(ingredientsList).then(() => {
+            showToast('Ingredients copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            // Fallback - show in alert
+            showToast('Could not copy automatically');
+            alert(ingredientsList);
+        });
     }
 
     function createRecipeCard(recipe) {
@@ -1416,15 +1640,23 @@
                     Add to new folder...
                 </button>
                 <div class="card-dropdown-divider"></div>
-                <button class="card-dropdown-item" data-action="add-to-meal-plan">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    Add to Meal Plan...
-                </button>
+                <div class="card-dropdown-submenu-container" data-submenu="meal-plan">
+                    <button class="card-dropdown-item has-submenu">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        Add to Meal Plan
+                        <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                    <div class="card-dropdown-submenu meal-plan-submenu" data-recipe-id="${recipe.id}">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </div>
                 <div class="card-dropdown-divider"></div>
                 <button class="card-dropdown-item" data-action="delete" style="color: var(--color-danger);">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1590,9 +1822,44 @@
                             showToast('Folder already exists');
                         }
                     }
-                } else if (action === 'add-to-meal-plan') {
+                } else if (action === 'add-to-day') {
+                    // Add recipe to specific day in meal plan
                     closeAllCardMenus();
-                    openMealPlanModal(recipeId);
+                    const planId = btn.dataset.planId;
+                    const day = btn.dataset.day;
+                    const targetRecipeId = btn.dataset.recipeId;
+                    if (addRecipeToMealPlan(targetRecipeId, planId, day)) {
+                        const plan = getMealPlans().find(p => p.id === planId);
+                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                        showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
+                    }
+                } else if (action === 'create-meal-plan') {
+                    // Create new meal plan from submenu
+                    closeAllCardMenus();
+                    const targetRecipeId = btn.dataset.recipeId;
+                    const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
+                    if (planName && planName.trim()) {
+                        const plan = addMealPlan(planName.trim());
+                        if (plan) {
+                            renderMealPlans();
+                            // Ask which day to add
+                            const dayChoice = prompt('Which day? (monday/tuesday/wednesday/thursday/friday/saturday/sunday):');
+                            if (dayChoice && dayChoice.trim()) {
+                                const day = dayChoice.trim().toLowerCase();
+                                if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].includes(day)) {
+                                    addRecipeToMealPlan(targetRecipeId, plan.id, day);
+                                    const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                                    showToast(`Created "${plan.name}" and added recipe to ${dayName}`);
+                                } else {
+                                    showToast(`Created "${plan.name}"`);
+                                }
+                            } else {
+                                showToast(`Created "${plan.name}"`);
+                            }
+                        } else {
+                            showToast('Meal plan with that name already exists');
+                        }
+                    }
                 } else if (action === 'show-more-tags') {
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
@@ -1625,6 +1892,11 @@
         if (!wasOpen) {
             dropdown.hidden = false;
             openCardMenu = dropdown;
+            // Populate meal plan submenu
+            const mealPlanSubmenu = dropdown.querySelector('.meal-plan-submenu');
+            if (mealPlanSubmenu) {
+                populateMealPlanSubmenu(mealPlanSubmenu);
+            }
         }
     }
 
@@ -3565,6 +3837,32 @@
                         showToast('Meal plan with that name already exists');
                     }
                 }
+            });
+        }
+
+        // Meal Plan Actions - Rename
+        if (elements.btnRenameMealPlan) {
+            elements.btnRenameMealPlan.addEventListener('click', () => {
+                if (!currentFilter.startsWith('mealplan:')) return;
+                const planId = currentFilter.replace('mealplan:', '');
+                const plan = getMealPlans().find(p => p.id === planId);
+                if (!plan) return;
+
+                const newName = prompt('Enter new name for this meal plan:', plan.name);
+                if (newName && newName.trim() && newName.trim() !== plan.name) {
+                    renameMealPlan(planId, newName.trim());
+                    elements.contentTitle.textContent = newName.trim();
+                    showToast('Meal plan renamed');
+                }
+            });
+        }
+
+        // Meal Plan Actions - Copy Ingredients
+        if (elements.btnCopyIngredients) {
+            elements.btnCopyIngredients.addEventListener('click', () => {
+                if (!currentFilter.startsWith('mealplan:')) return;
+                const planId = currentFilter.replace('mealplan:', '');
+                copyMealPlanIngredients(planId);
             });
         }
 
