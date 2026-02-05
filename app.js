@@ -1252,6 +1252,8 @@
     // ============================================
 
     function renderRecipes() {
+        // Close any open card menus before rebuilding DOM (dropdown may be in body)
+        closeAllCardMenus();
         const recipes = getRecipes();
         let filtered = recipes;
 
@@ -1377,7 +1379,7 @@
             const plan = getMealPlans().find(p => p.id === planId);
             if (plan) {
                 elements.recipeGrid.innerHTML = renderMealPlanWeeklyView(plan);
-                elements.recipeGrid.classList.remove('list-view', 'bulk-select-mode');
+                elements.recipeGrid.classList.remove('bulk-select-mode');
 
                 // Set up click handlers for recipe cards in weekly view
                 elements.recipeGrid.querySelectorAll('.meal-plan-recipe-card').forEach(item => {
@@ -1619,79 +1621,17 @@
                 if (action === 'favorite') {
                     toggleFavorite(recipeId);
                 } else if (action === 'toggle-menu') {
-                    toggleCardMenu(card);
-                } else if (action === 'edit') {
-                    closeAllCardMenus();
-                    openEditModal(recipeId);
-                } else if (action === 'delete') {
-                    closeAllCardMenus();
-                    if (confirm('Are you sure you want to delete this recipe?')) {
-                        // Properly await delete and cloud sync
-                        (async () => {
-                            await deleteRecipeById(recipeId);
-                            renderRecipes();
-                            renderTagsFilter();
-                            renderFolders();
-                        })();
-                    }
-                } else if (action === 'toggle-folder') {
-                    closeAllCardMenus();
-                    const folderId = btn.dataset.folderId;
-                    const currentRecipe = getRecipeById(recipeId);
-                    if (!currentRecipe) return;
-                    const isInFolder = currentRecipe.folders && currentRecipe.folders.includes(folderId);
-                    if (isInFolder) {
-                        removeRecipeFromFolder(recipeId, folderId);
-                        showToast('Removed from folder');
-                    } else {
-                        addRecipeToFolder(recipeId, folderId);
-                        showToast('Added to folder');
-                    }
-                    renderRecipes();
-                    renderFolders();
-                } else if (action === 'new-folder') {
-                    closeAllCardMenus();
-                    const folderName = prompt('Enter folder name:');
-                    if (folderName && folderName.trim()) {
-                        const folder = addFolder(folderName.trim());
-                        if (folder) {
-                            addRecipeToFolder(recipeId, folder.id);
-                            renderFolders();
-                            renderRecipes();
-                            showToast(`Added to "${folder.name}"`);
-                        } else {
-                            showToast('Folder already exists');
-                        }
-                    }
-                } else if (action === 'add-to-day') {
-                    const planId = btn.dataset.planId;
-                    const day = btn.dataset.day;
-                    if (addRecipeToMealPlan(recipeId, planId, day)) {
-                        const plan = getMealPlans().find(p => p.id === planId);
-                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
-                        showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
-                    }
-                    closeAllCardMenus();
-                } else if (action === 'create-meal-plan') {
-                    closeAllCardMenus();
-                    const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
-                    if (planName && planName.trim()) {
-                        const plan = await addMealPlan(planName.trim());
-                        if (plan) {
-                            renderMealPlans();
-                            showToast(`Created "${plan.name}" - click menu again to add recipe`);
-                        } else {
-                            showToast('Meal plan with that name already exists');
-                        }
-                    }
+                    toggleCardMenu(card, recipeId);
+                } else if (action === 'toggle-select') {
+                    toggleRecipeSelection(recipeId, card);
                 } else if (action === 'show-more-tags') {
                     const currentRecipe = getRecipeById(recipeId);
                     if (!currentRecipe) return;
                     const tagsContainer = btn.closest('.recipe-card-tags');
                     const allTags = currentRecipe.tags || [];
                     tagsContainer.innerHTML = allTags.map(t => `<span class="recipe-card-tag">${escapeHtml(t)}</span>`).join('');
-                } else if (action === 'toggle-select') {
-                    toggleRecipeSelection(recipeId, card);
+                } else {
+                    await handleCardDropdownAction(action, btn, recipeId);
                 }
             } else {
                 // In bulk select mode, clicking anywhere toggles selection
@@ -1709,16 +1649,84 @@
         return card;
     }
 
-    function toggleCardMenu(card) {
+    // Shared handler for card dropdown actions (used by both card clicks and body-mounted dropdown)
+    async function handleCardDropdownAction(action, btn, recipeId) {
+        if (action === 'edit') {
+            closeAllCardMenus();
+            openEditModal(recipeId);
+        } else if (action === 'delete') {
+            closeAllCardMenus();
+            if (confirm('Are you sure you want to delete this recipe?')) {
+                await deleteRecipeById(recipeId);
+                renderRecipes();
+                renderTagsFilter();
+                renderFolders();
+            }
+        } else if (action === 'toggle-folder') {
+            closeAllCardMenus();
+            const folderId = btn.dataset.folderId;
+            const currentRecipe = getRecipeById(recipeId);
+            if (!currentRecipe) return;
+            const isInFolder = currentRecipe.folders && currentRecipe.folders.includes(folderId);
+            if (isInFolder) {
+                removeRecipeFromFolder(recipeId, folderId);
+                showToast('Removed from folder');
+            } else {
+                addRecipeToFolder(recipeId, folderId);
+                showToast('Added to folder');
+            }
+            renderRecipes();
+            renderFolders();
+        } else if (action === 'new-folder') {
+            closeAllCardMenus();
+            const folderName = prompt('Enter folder name:');
+            if (folderName && folderName.trim()) {
+                const folder = addFolder(folderName.trim());
+                if (folder) {
+                    addRecipeToFolder(recipeId, folder.id);
+                    renderFolders();
+                    renderRecipes();
+                    showToast(`Added to "${folder.name}"`);
+                } else {
+                    showToast('Folder already exists');
+                }
+            }
+        } else if (action === 'add-to-day') {
+            const planId = btn.dataset.planId;
+            const day = btn.dataset.day;
+            if (addRecipeToMealPlan(recipeId, planId, day)) {
+                const plan = getMealPlans().find(p => p.id === planId);
+                const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                showToast(`Added to ${plan?.name || 'meal plan'} (${dayName})`);
+            }
+            closeAllCardMenus();
+        } else if (action === 'create-meal-plan') {
+            closeAllCardMenus();
+            const planName = prompt('Enter meal plan name (e.g., "Week of Jan 15"):');
+            if (planName && planName.trim()) {
+                const plan = await addMealPlan(planName.trim());
+                if (plan) {
+                    renderMealPlans();
+                    showToast(`Created "${plan.name}" - click menu again to add recipe`);
+                } else {
+                    showToast('Meal plan with that name already exists');
+                }
+            }
+        }
+    }
+
+    function toggleCardMenu(card, recipeId) {
         const dropdown = card.querySelector('.card-dropdown');
-        const wasOpen = !dropdown.hidden;
+        const wasOpen = openCardMenu && openCardMenu._dropdown === dropdown;
         closeAllCardMenus();
         if (!wasOpen) {
             dropdown.hidden = false;
-            openCardMenu = dropdown;
-            // Add menu-open class to card so overflow:hidden and transform are removed
-            card.classList.add('menu-open');
-            // Position dropdown with fixed positioning
+            // Store original parent so we can return it later
+            dropdown._originalParent = dropdown.parentNode;
+            // Move dropdown to body to escape all overflow/transform clipping
+            document.body.appendChild(dropdown);
+            openCardMenu = { _dropdown: dropdown, _recipeId: recipeId };
+            // Position with fixed positioning
             const btn = card.querySelector('.card-btn-menu');
             if (btn) {
                 const rect = btn.getBoundingClientRect();
@@ -1726,6 +1734,7 @@
                 dropdown.style.top = (rect.bottom + 4) + 'px';
                 dropdown.style.right = (window.innerWidth - rect.right) + 'px';
                 dropdown.style.left = 'auto';
+                dropdown.style.zIndex = '10000';
                 // If dropdown would go below viewport, flip it above
                 requestAnimationFrame(() => {
                     const dropRect = dropdown.getBoundingClientRect();
@@ -1738,14 +1747,20 @@
     }
 
     function closeAllCardMenus() {
-        document.querySelectorAll('.recipe-card.menu-open').forEach(c => c.classList.remove('menu-open'));
-        document.querySelectorAll('.card-dropdown').forEach(d => {
+        if (openCardMenu && openCardMenu._dropdown) {
+            const d = openCardMenu._dropdown;
             d.hidden = true;
             d.style.position = '';
             d.style.top = '';
             d.style.right = '';
             d.style.left = '';
-        });
+            d.style.zIndex = '';
+            // Move dropdown back to its original parent
+            if (d._originalParent) {
+                d._originalParent.appendChild(d);
+                delete d._originalParent;
+            }
+        }
         openCardMenu = null;
     }
 
@@ -4255,8 +4270,19 @@
             });
         }
 
-        // Close card menus when clicking outside
-        document.addEventListener('click', (e) => {
+        // Handle clicks on body-mounted card dropdown items, and close menus when clicking outside
+        document.addEventListener('click', async (e) => {
+            // If clicking on an action inside the body-mounted dropdown, handle it
+            if (openCardMenu && openCardMenu._dropdown && openCardMenu._dropdown.contains(e.target)) {
+                const btn = e.target.closest('[data-action]');
+                if (btn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    await handleCardDropdownAction(btn.dataset.action, btn, openCardMenu._recipeId);
+                }
+                return;
+            }
+            // Close menus when clicking outside the menu container
             if (!e.target.closest('.card-menu-container')) {
                 closeAllCardMenus();
             }
