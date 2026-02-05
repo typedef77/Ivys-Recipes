@@ -1183,7 +1183,12 @@
         modalIngredients: document.getElementById('modal-ingredients'),
         ingredientsModalTitle: document.getElementById('ingredients-modal-title'),
         ingredientsListTextarea: document.getElementById('ingredients-list-textarea'),
-        btnCopyIngredientsModal: document.getElementById('btn-copy-ingredients-modal')
+        btnCopyIngredientsModal: document.getElementById('btn-copy-ingredients-modal'),
+        // Recipe Picker Modal
+        modalRecipePicker: document.getElementById('modal-recipe-picker'),
+        recipePickerTitle: document.getElementById('recipe-picker-title'),
+        recipePickerSearch: document.getElementById('recipe-picker-search'),
+        recipePickerList: document.getElementById('recipe-picker-list')
     };
 
     // Track open card menus
@@ -1392,6 +1397,14 @@
                             renderRecipes();
                             showToast('Recipe removed from this day');
                         }
+                    });
+                });
+
+                // Set up "Add Recipe" button handlers per day
+                elements.recipeGrid.querySelectorAll('.meal-plan-add-recipe-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openRecipePicker(btn.dataset.planId, btn.dataset.day);
                     });
                 });
 
@@ -3656,7 +3669,14 @@
                         <div class="meal-plan-day" data-day="${day}">
                             <div class="meal-plan-day-header">
                                 <span class="meal-plan-day-name">${dayNames[day]}</span>
-                                <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
+                                <div class="meal-plan-day-header-right">
+                                    <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
+                                    <button class="meal-plan-add-recipe-btn" data-day="${day}" data-plan-id="${plan.id}" title="Add recipe">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <path d="M12 5v14M5 12h14"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                             <div class="meal-plan-day-recipes ${dayRecipes.length === 0 ? 'empty' : ''}" data-day="${day}" data-plan-id="${plan.id}">
                                 ${dayRecipes.length === 0 ? '<span class="meal-plan-empty-text">Drop recipes here</span>' : dayRecipes.map(recipe => {
@@ -3687,6 +3707,57 @@
         `;
 
         return html;
+    }
+
+    // Recipe picker for adding recipes to a specific meal plan day
+    let recipePickerState = { planId: null, day: null };
+
+    function openRecipePicker(planId, day) {
+        recipePickerState = { planId, day };
+        const dayNames = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' };
+        elements.recipePickerTitle.textContent = `Add Recipe to ${dayNames[day]}`;
+        elements.recipePickerSearch.value = '';
+        populateRecipePicker('');
+        openModal(elements.modalRecipePicker);
+        elements.recipePickerSearch.focus();
+    }
+
+    function populateRecipePicker(searchTerm) {
+        const recipes = getRecipes();
+        const filtered = searchTerm
+            ? recipes.filter(r => r.title.toLowerCase().includes(searchTerm.toLowerCase()))
+            : recipes;
+
+        if (filtered.length === 0) {
+            elements.recipePickerList.innerHTML = '<div class="recipe-picker-empty">No recipes found</div>';
+            return;
+        }
+
+        elements.recipePickerList.innerHTML = filtered.map(recipe => `
+            <div class="recipe-picker-item" data-recipe-id="${recipe.id}">
+                <div class="recipe-picker-item-image">
+                    ${recipe.image
+                        ? `<img src="${escapeHtml(recipe.image)}" alt="" loading="lazy">`
+                        : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>`
+                    }
+                </div>
+                <span class="recipe-picker-item-title">${escapeHtml(recipe.title)}</span>
+            </div>
+        `).join('');
+
+        // Attach click handlers
+        elements.recipePickerList.querySelectorAll('.recipe-picker-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const recipeId = item.dataset.recipeId;
+                if (addRecipeToMealPlan(recipeId, recipePickerState.planId, recipePickerState.day)) {
+                    closeModal(elements.modalRecipePicker);
+                    renderRecipes();
+                    showToast('Recipe added!');
+                }
+            });
+        });
     }
 
     function setupMealPlanDragDrop() {
@@ -4802,6 +4873,13 @@
         // Ingredients modal copy button
         if (elements.btnCopyIngredientsModal) {
             elements.btnCopyIngredientsModal.addEventListener('click', copyIngredientsFromModal);
+        }
+
+        // Recipe picker search
+        if (elements.recipePickerSearch) {
+            elements.recipePickerSearch.addEventListener('input', (e) => {
+                populateRecipePicker(e.target.value);
+            });
         }
 
         // Set up meal plan drag and drop
