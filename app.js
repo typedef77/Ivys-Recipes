@@ -1356,10 +1356,15 @@
         elements.contentTitle.textContent = titleText;
         elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
-        // Show/hide meal plan actions
+        // Show/hide meal plan actions and view toggle
         const isViewingMealPlan = currentFilter.startsWith('mealplan:');
         if (elements.mealPlanActions) {
             elements.mealPlanActions.hidden = !isViewingMealPlan;
+        }
+        // Hide view toggle on meal plan page (meal plan has its own layout)
+        const viewToggle = document.querySelector('.view-toggle');
+        if (viewToggle) {
+            viewToggle.style.display = isViewingMealPlan ? 'none' : '';
         }
 
         elements.recipeGrid.innerHTML = '';
@@ -1711,7 +1716,9 @@
         if (!wasOpen) {
             dropdown.hidden = false;
             openCardMenu = dropdown;
-            // Position dropdown with fixed positioning to escape overflow:hidden
+            // Add menu-open class to card so overflow:hidden and transform are removed
+            card.classList.add('menu-open');
+            // Position dropdown with fixed positioning
             const btn = card.querySelector('.card-btn-menu');
             if (btn) {
                 const rect = btn.getBoundingClientRect();
@@ -1731,6 +1738,7 @@
     }
 
     function closeAllCardMenus() {
+        document.querySelectorAll('.recipe-card.menu-open').forEach(c => c.classList.remove('menu-open'));
         document.querySelectorAll('.card-dropdown').forEach(d => {
             d.hidden = true;
             d.style.position = '';
