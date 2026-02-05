@@ -1369,19 +1369,21 @@
                 elements.recipeGrid.innerHTML = renderMealPlanWeeklyView(plan);
                 elements.recipeGrid.classList.remove('list-view', 'bulk-select-mode');
 
-                // Set up click handlers for recipe cards in weekly view
-                elements.recipeGrid.querySelectorAll('.meal-plan-card .recipe-card-link').forEach(link => {
-                    link.addEventListener('click', (e) => {
-                        const recipeId = link.dataset.recipeId;
-                        const recipe = getRecipeById(recipeId);
-                        if (recipe) {
-                            openViewModal(recipe);
+                // Set up click handlers for weekly view
+                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        if (!e.target.closest('.meal-plan-recipe-remove')) {
+                            const recipeId = item.dataset.recipeId;
+                            const recipe = getRecipeById(recipeId);
+                            if (recipe) {
+                                openViewModal(recipe);
+                            }
                         }
                     });
                 });
 
                 // Set up remove handlers
-                elements.recipeGrid.querySelectorAll('.meal-plan-card-remove').forEach(btn => {
+                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-remove').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const recipeId = btn.dataset.recipeId;
@@ -1390,13 +1392,6 @@
                             renderRecipes();
                             showToast('Recipe removed from this day');
                         }
-                    });
-                });
-
-                // Set up "Add Recipe" buttons
-                elements.recipeGrid.querySelectorAll('[data-action="add-recipe-to-day"]').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        openRecipePickerForDay(planId, btn.dataset.day);
                     });
                 });
 
@@ -3490,93 +3485,6 @@
         return true;
     }
 
-    function openRecipePickerForDay(planId, day) {
-        const dayNames = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' };
-        const plan = getMealPlans().find(p => p.id === planId);
-        if (!plan) return;
-
-        // Get recipes already in this day to exclude them
-        const existingIds = new Set(plan.days[day] || []);
-        const allRecipes = getRecipes().filter(r => !r.suggestedBy);
-
-        // Build and show the picker modal
-        const modal = document.getElementById('modal-recipe-picker');
-        if (!modal) return;
-
-        const titleEl = document.getElementById('recipe-picker-title');
-        const searchEl = document.getElementById('recipe-picker-search');
-        const gridEl = document.getElementById('recipe-picker-grid');
-
-        titleEl.textContent = `Add recipe to ${dayNames[day]}`;
-        searchEl.value = '';
-
-        function renderPickerResults(query) {
-            const q = (query || '').toLowerCase().trim();
-            const filtered = allRecipes.filter(r => {
-                if (q && !r.title.toLowerCase().includes(q) &&
-                    !(r.tags || []).some(t => t.toLowerCase().includes(q)) &&
-                    !(r.source || '').toLowerCase().includes(q)) {
-                    return false;
-                }
-                return true;
-            });
-
-            if (filtered.length === 0) {
-                gridEl.innerHTML = `<div class="recipe-picker-empty">No recipes found</div>`;
-                return;
-            }
-
-            gridEl.innerHTML = filtered.map(recipe => {
-                const inDay = existingIds.has(recipe.id);
-                return `
-                    <button class="recipe-picker-item ${inDay ? 'already-added' : ''}" data-recipe-id="${recipe.id}" ${inDay ? 'disabled' : ''}>
-                        <div class="recipe-picker-item-image">
-                            ${recipe.image
-                                ? `<img src="${escapeHtml(recipe.image)}" alt="" loading="lazy">`
-                                : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                                </svg>`
-                            }
-                        </div>
-                        <div class="recipe-picker-item-info">
-                            <span class="recipe-picker-item-title">${escapeHtml(recipe.title)}</span>
-                            ${inDay ? '<span class="recipe-picker-item-badge">Already added</span>' : ''}
-                        </div>
-                    </button>
-                `;
-            }).join('');
-
-            // Wire click handlers
-            gridEl.querySelectorAll('.recipe-picker-item:not(.already-added)').forEach(item => {
-                item.addEventListener('click', () => {
-                    const recipeId = item.dataset.recipeId;
-                    if (addRecipeToMealPlan(recipeId, planId, day)) {
-                        existingIds.add(recipeId);
-                        showToast(`Added to ${dayNames[day]}`);
-                        // Mark as added visually
-                        item.classList.add('already-added');
-                        item.disabled = true;
-                        const badge = document.createElement('span');
-                        badge.className = 'recipe-picker-item-badge';
-                        badge.textContent = 'Added!';
-                        item.querySelector('.recipe-picker-item-info').appendChild(badge);
-                        // Re-render the meal plan behind the modal
-                        renderRecipes();
-                        // Re-attach the picker modal since renderRecipes rebuilds the grid
-                    }
-                });
-            });
-        }
-
-        renderPickerResults('');
-
-        searchEl.addEventListener('input', () => {
-            renderPickerResults(searchEl.value);
-        });
-
-        openModal(modal);
-    }
-
     function showIngredientsModal(planId) {
         const mealPlans = getMealPlans();
         const plan = mealPlans.find(p => p.id === planId);
@@ -3721,7 +3629,7 @@
         const html = `
             <div class="meal-plan-weekly-view">
                 ${dayOrder.map(day => {
-                    const dayRecipes = (plan.days[day] || []).map(id => recipes.find(r => r.id === id)).filter(Boolean);
+                    const dayRecipes = plan.days[day] || [];
                     return `
                         <div class="meal-plan-day" data-day="${day}">
                             <div class="meal-plan-day-header">
@@ -3729,50 +3637,40 @@
                                 <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div class="meal-plan-day-recipes ${dayRecipes.length === 0 ? 'empty' : ''}" data-day="${day}" data-plan-id="${plan.id}">
-                                ${dayRecipes.map(recipe => {
-                                    const sourceName = recipe.source ? recipe.source.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : '';
-                                    const timeStr = [recipe.prepTime, recipe.cookTime].filter(Boolean).join(' + ');
+                                ${dayRecipes.length === 0 ? 'Drop recipes here' : dayRecipes.map(recipeId => {
+                                    const recipe = recipes.find(r => r.id === recipeId);
+                                    if (!recipe) return '';
                                     return `
-                                        <article class="recipe-card meal-plan-card" draggable="true" data-recipe-id="${recipe.id}" data-day="${day}">
-                                            <div class="meal-plan-card-drag-handle" title="Drag to move day">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <div class="meal-plan-recipe-item" draggable="true" data-recipe-id="${recipeId}" data-day="${day}">
+                                            <div class="meal-plan-drag-handle" title="Drag to move">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <circle cx="9" cy="5" r="1"></circle><circle cx="15" cy="5" r="1"></circle>
                                                     <circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
                                                     <circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="19" r="1"></circle>
                                                 </svg>
                                             </div>
-                                            <button class="meal-plan-card-remove" data-recipe-id="${recipe.id}" data-day="${day}" title="Remove from ${dayNames[day]}">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            ${recipe.image ?
+                                                `<img src="${recipe.image}" alt="" class="meal-plan-recipe-image" loading="lazy" draggable="false">` :
+                                                `<div class="meal-plan-recipe-image meal-plan-recipe-placeholder">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" stroke-width="2">
+                                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                                    </svg>
+                                                </div>`
+                                            }
+                                            <div class="meal-plan-recipe-info">
+                                                <div class="meal-plan-recipe-name">${escapeHtml(recipe.title)}</div>
+                                                <div class="meal-plan-recipe-meta">
+                                                    ${recipe.cookTime ? recipe.cookTime : ''}
+                                                </div>
+                                            </div>
+                                            <button class="meal-plan-recipe-remove" data-recipe-id="${recipeId}" data-day="${day}" title="Remove from this day">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M18 6 6 18M6 6l12 12"></path>
                                                 </svg>
                                             </button>
-                                            <div class="recipe-card-link" data-recipe-id="${recipe.id}">
-                                                <div class="recipe-card-image-container">
-                                                    ${recipe.image
-                                                        ? `<img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" class="recipe-card-image" loading="lazy" draggable="false">`
-                                                        : `<div class="recipe-card-placeholder">
-                                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                                                            </svg>
-                                                        </div>`
-                                                    }
-                                                    ${sourceName ? `<div class="card-source">${escapeHtml(sourceName)}</div>` : ''}
-                                                </div>
-                                                <div class="recipe-card-content">
-                                                    <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
-                                                    ${timeStr ? `<div class="recipe-card-meta"><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(timeStr)}</span></div>` : ''}
-                                                </div>
-                                            </div>
-                                        </article>
+                                        </div>
                                     `;
                                 }).join('')}
-                                <button class="meal-plan-add-recipe-card" data-action="add-recipe-to-day" data-day="${day}" data-plan-id="${plan.id}" title="Add a recipe to ${dayNames[day]}">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                    <span>Add Recipe</span>
-                                </button>
                             </div>
                         </div>
                     `;
@@ -3786,7 +3684,7 @@
     function setupMealPlanDragDrop() {
         // Desktop drag and drop
         document.addEventListener('dragstart', (e) => {
-            const item = e.target.closest('.meal-plan-card');
+            const item = e.target.closest('.meal-plan-recipe-item');
             if (item) {
                 item.classList.add('dragging');
                 e.dataTransfer.setData('text/plain', JSON.stringify({
@@ -3794,12 +3692,13 @@
                     fromDay: item.dataset.day
                 }));
                 e.dataTransfer.effectAllowed = 'move';
+                // Make drag image slightly transparent
                 setTimeout(() => item.style.opacity = '0.4', 0);
             }
         });
 
         document.addEventListener('dragend', (e) => {
-            const item = e.target.closest('.meal-plan-card');
+            const item = e.target.closest('.meal-plan-recipe-item');
             if (item) {
                 item.classList.remove('dragging');
                 item.style.opacity = '';
@@ -3814,6 +3713,7 @@
             if (dropZone) {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
+                // Remove drag-over from other zones
                 document.querySelectorAll('.meal-plan-day-recipes.drag-over').forEach(el => {
                     if (el !== dropZone) el.classList.remove('drag-over');
                 });
@@ -3856,9 +3756,9 @@
         let touchGhost = null;
 
         document.addEventListener('touchstart', (e) => {
-            const handle = e.target.closest('.meal-plan-card-drag-handle');
+            const handle = e.target.closest('.meal-plan-drag-handle');
             if (!handle) return;
-            const item = handle.closest('.meal-plan-card');
+            const item = handle.closest('.meal-plan-recipe-item');
             if (!item) return;
 
             touchDragData = {
@@ -3867,19 +3767,20 @@
             };
             touchDragEl = item;
 
+            // Create ghost element
             touchGhost = item.cloneNode(true);
             touchGhost.classList.add('touch-drag-ghost');
             touchGhost.style.position = 'fixed';
-            touchGhost.style.width = Math.min(item.offsetWidth, 180) + 'px';
+            touchGhost.style.width = item.offsetWidth + 'px';
             touchGhost.style.zIndex = '9999';
             touchGhost.style.pointerEvents = 'none';
             touchGhost.style.opacity = '0.85';
             touchGhost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
-            touchGhost.style.transform = 'scale(0.95)';
+            touchGhost.style.transform = 'scale(1.02)';
 
             const touch = e.touches[0];
-            touchGhost.style.left = (touch.clientX - 90) + 'px';
-            touchGhost.style.top = (touch.clientY - 30) + 'px';
+            touchGhost.style.left = (touch.clientX - item.offsetWidth / 2) + 'px';
+            touchGhost.style.top = (touch.clientY - 20) + 'px';
 
             document.body.appendChild(touchGhost);
             item.classList.add('dragging');
@@ -3890,9 +3791,10 @@
             e.preventDefault();
 
             const touch = e.touches[0];
-            touchGhost.style.left = (touch.clientX - 90) + 'px';
-            touchGhost.style.top = (touch.clientY - 30) + 'px';
+            touchGhost.style.left = (touch.clientX - touchGhost.offsetWidth / 2) + 'px';
+            touchGhost.style.top = (touch.clientY - 20) + 'px';
 
+            // Highlight drop zone under finger
             const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const dropZone = elemBelow?.closest('.meal-plan-day-recipes');
 
@@ -3907,6 +3809,7 @@
         document.addEventListener('touchend', (e) => {
             if (!touchDragData) return;
 
+            // Find drop zone
             const touch = e.changedTouches[0];
             const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const dropZone = elemBelow?.closest('.meal-plan-day-recipes');
