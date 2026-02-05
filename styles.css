@@ -576,12 +576,9 @@ h1, h2, h3, h4 {
 }
 
 /* Weekly Meal Plan View */
-/* Meal plan weekly view - days in a wrapping grid */
+/* Meal plan weekly view - days flow directly in .recipe-grid */
 .meal-plan-weekly-view {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
-    grid-column: 1 / -1;
+    display: contents;
 }
 
 .meal-plan-day {
@@ -755,12 +752,7 @@ h1, h2, h3, h4 {
     color: white;
 }
 
-/* Meal plan list view - days stack full width */
-.recipe-grid.list-view .meal-plan-weekly-view {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
+/* Meal plan list view - days stack full width (handled by .recipe-grid.list-view being flex column) */
 
 /* Touch drag ghost */
 .touch-drag-ghost {
@@ -2745,9 +2737,6 @@ h1, h2, h3, h4 {
         grid-template-columns: 1fr;
     }
 
-    .meal-plan-weekly-view {
-        grid-template-columns: 1fr;
-    }
 
     .recipe-card-image,
     .recipe-card-placeholder {
