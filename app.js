@@ -3681,9 +3681,7 @@
         const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         const dayNames = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' };
 
-        const html = `
-            <div class="meal-plan-weekly-view">
-                ${dayOrder.map(day => {
+        const html = dayOrder.map(day => {
                     const dayRecipes = (plan.days[day] || []).map(id => recipes.find(r => r.id === id)).filter(Boolean);
                     return `
                         <div class="meal-plan-day" data-day="${day}">
@@ -3722,9 +3720,7 @@
                             </div>
                         </div>
                     `;
-                }).join('')}
-            </div>
-        `;
+                }).join('');
 
         return html;
     }

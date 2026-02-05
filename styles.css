@@ -576,11 +576,7 @@ h1, h2, h3, h4 {
 }
 
 /* Weekly Meal Plan View */
-/* Meal plan weekly view - days flow directly in .recipe-grid */
-.meal-plan-weekly-view {
-    display: contents;
-}
-
+/* Meal plan days - direct children of .recipe-grid, flow as grid/flex items */
 .meal-plan-day {
     background: var(--color-surface);
     border-radius: var(--radius-md);
@@ -751,8 +747,6 @@ h1, h2, h3, h4 {
     background: var(--color-danger);
     color: white;
 }
-
-/* Meal plan list view - days stack full width (handled by .recipe-grid.list-view being flex column) */
 
 /* Touch drag ghost */
 .touch-drag-ghost {
