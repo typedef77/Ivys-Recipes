@@ -1369,10 +1369,10 @@
                 elements.recipeGrid.innerHTML = renderMealPlanWeeklyView(plan);
                 elements.recipeGrid.classList.remove('list-view', 'bulk-select-mode');
 
-                // Set up click handlers for weekly view
-                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-item').forEach(item => {
+                // Set up click handlers for recipe cards in weekly view
+                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-card').forEach(item => {
                     item.addEventListener('click', (e) => {
-                        if (!e.target.closest('.meal-plan-recipe-remove')) {
+                        if (!e.target.closest('.meal-plan-recipe-card-remove')) {
                             const recipeId = item.dataset.recipeId;
                             const recipe = getRecipeById(recipeId);
                             if (recipe) {
@@ -1383,7 +1383,7 @@
                 });
 
                 // Set up remove handlers
-                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-remove').forEach(btn => {
+                elements.recipeGrid.querySelectorAll('.meal-plan-recipe-card-remove').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const recipeId = btn.dataset.recipeId;
@@ -1698,11 +1698,33 @@
         if (!wasOpen) {
             dropdown.hidden = false;
             openCardMenu = dropdown;
+            // Position dropdown with fixed positioning to escape overflow:hidden
+            const btn = card.querySelector('.card-btn-menu');
+            if (btn) {
+                const rect = btn.getBoundingClientRect();
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+                dropdown.style.left = 'auto';
+                // If dropdown would go below viewport, flip it above
+                requestAnimationFrame(() => {
+                    const dropRect = dropdown.getBoundingClientRect();
+                    if (dropRect.bottom > window.innerHeight - 8) {
+                        dropdown.style.top = Math.max(8, rect.top - dropRect.height - 4) + 'px';
+                    }
+                });
+            }
         }
     }
 
     function closeAllCardMenus() {
-        document.querySelectorAll('.card-dropdown').forEach(d => d.hidden = true);
+        document.querySelectorAll('.card-dropdown').forEach(d => {
+            d.hidden = true;
+            d.style.position = '';
+            d.style.top = '';
+            d.style.right = '';
+            d.style.left = '';
+        });
         openCardMenu = null;
     }
 
@@ -3629,7 +3651,7 @@
         const html = `
             <div class="meal-plan-weekly-view">
                 ${dayOrder.map(day => {
-                    const dayRecipes = plan.days[day] || [];
+                    const dayRecipes = (plan.days[day] || []).map(id => recipes.find(r => r.id === id)).filter(Boolean);
                     return `
                         <div class="meal-plan-day" data-day="${day}">
                             <div class="meal-plan-day-header">
@@ -3637,37 +3659,23 @@
                                 <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div class="meal-plan-day-recipes ${dayRecipes.length === 0 ? 'empty' : ''}" data-day="${day}" data-plan-id="${plan.id}">
-                                ${dayRecipes.length === 0 ? 'Drop recipes here' : dayRecipes.map(recipeId => {
-                                    const recipe = recipes.find(r => r.id === recipeId);
-                                    if (!recipe) return '';
+                                ${dayRecipes.length === 0 ? '<span class="meal-plan-empty-text">Drop recipes here</span>' : dayRecipes.map(recipe => {
                                     return `
-                                        <div class="meal-plan-recipe-item" draggable="true" data-recipe-id="${recipeId}" data-day="${day}">
-                                            <div class="meal-plan-drag-handle" title="Drag to move">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <circle cx="9" cy="5" r="1"></circle><circle cx="15" cy="5" r="1"></circle>
-                                                    <circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle>
-                                                    <circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="19" r="1"></circle>
-                                                </svg>
-                                            </div>
-                                            ${recipe.image ?
-                                                `<img src="${recipe.image}" alt="" class="meal-plan-recipe-image" loading="lazy" draggable="false">` :
-                                                `<div class="meal-plan-recipe-image meal-plan-recipe-placeholder">
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" stroke-width="2">
-                                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                                                    </svg>
-                                                </div>`
-                                            }
-                                            <div class="meal-plan-recipe-info">
-                                                <div class="meal-plan-recipe-name">${escapeHtml(recipe.title)}</div>
-                                                <div class="meal-plan-recipe-meta">
-                                                    ${recipe.cookTime ? recipe.cookTime : ''}
-                                                </div>
-                                            </div>
-                                            <button class="meal-plan-recipe-remove" data-recipe-id="${recipeId}" data-day="${day}" title="Remove from this day">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <div class="meal-plan-recipe-card" draggable="true" data-recipe-id="${recipe.id}" data-day="${day}">
+                                            <button class="meal-plan-recipe-card-remove" data-recipe-id="${recipe.id}" data-day="${day}" title="Remove">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                                     <path d="M18 6 6 18M6 6l12 12"></path>
                                                 </svg>
                                             </button>
+                                            <div class="meal-plan-recipe-card-image">
+                                                ${recipe.image
+                                                    ? `<img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" draggable="false">`
+                                                    : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                                    </svg>`
+                                                }
+                                            </div>
+                                            <div class="meal-plan-recipe-card-title">${escapeHtml(recipe.title)}</div>
                                         </div>
                                     `;
                                 }).join('')}
@@ -3684,7 +3692,7 @@
     function setupMealPlanDragDrop() {
         // Desktop drag and drop
         document.addEventListener('dragstart', (e) => {
-            const item = e.target.closest('.meal-plan-recipe-item');
+            const item = e.target.closest('.meal-plan-recipe-card');
             if (item) {
                 item.classList.add('dragging');
                 e.dataTransfer.setData('text/plain', JSON.stringify({
@@ -3692,13 +3700,12 @@
                     fromDay: item.dataset.day
                 }));
                 e.dataTransfer.effectAllowed = 'move';
-                // Make drag image slightly transparent
                 setTimeout(() => item.style.opacity = '0.4', 0);
             }
         });
 
         document.addEventListener('dragend', (e) => {
-            const item = e.target.closest('.meal-plan-recipe-item');
+            const item = e.target.closest('.meal-plan-recipe-card');
             if (item) {
                 item.classList.remove('dragging');
                 item.style.opacity = '';
@@ -3713,7 +3720,6 @@
             if (dropZone) {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                // Remove drag-over from other zones
                 document.querySelectorAll('.meal-plan-day-recipes.drag-over').forEach(el => {
                     if (el !== dropZone) el.classList.remove('drag-over');
                 });
@@ -3754,62 +3760,60 @@
         let touchDragData = null;
         let touchDragEl = null;
         let touchGhost = null;
+        let touchTimer = null;
 
         document.addEventListener('touchstart', (e) => {
-            const handle = e.target.closest('.meal-plan-drag-handle');
-            if (!handle) return;
-            const item = handle.closest('.meal-plan-recipe-item');
-            if (!item) return;
+            const item = e.target.closest('.meal-plan-recipe-card');
+            if (!item || e.target.closest('.meal-plan-recipe-card-remove')) return;
 
-            touchDragData = {
-                recipeId: item.dataset.recipeId,
-                fromDay: item.dataset.day
-            };
-            touchDragEl = item;
+            // Long-press to start drag on touch
+            touchTimer = setTimeout(() => {
+                touchDragData = {
+                    recipeId: item.dataset.recipeId,
+                    fromDay: item.dataset.day
+                };
+                touchDragEl = item;
 
-            // Create ghost element
-            touchGhost = item.cloneNode(true);
-            touchGhost.classList.add('touch-drag-ghost');
-            touchGhost.style.position = 'fixed';
-            touchGhost.style.width = item.offsetWidth + 'px';
-            touchGhost.style.zIndex = '9999';
-            touchGhost.style.pointerEvents = 'none';
-            touchGhost.style.opacity = '0.85';
-            touchGhost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
-            touchGhost.style.transform = 'scale(1.02)';
+                touchGhost = item.cloneNode(true);
+                touchGhost.classList.add('touch-drag-ghost');
+                touchGhost.style.position = 'fixed';
+                touchGhost.style.width = item.offsetWidth + 'px';
+                touchGhost.style.zIndex = '9999';
+                touchGhost.style.pointerEvents = 'none';
+                touchGhost.style.opacity = '0.85';
+                touchGhost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
 
-            const touch = e.touches[0];
-            touchGhost.style.left = (touch.clientX - item.offsetWidth / 2) + 'px';
-            touchGhost.style.top = (touch.clientY - 20) + 'px';
+                const touch = e.touches[0];
+                touchGhost.style.left = (touch.clientX - item.offsetWidth / 2) + 'px';
+                touchGhost.style.top = (touch.clientY - 30) + 'px';
 
-            document.body.appendChild(touchGhost);
-            item.classList.add('dragging');
+                document.body.appendChild(touchGhost);
+                item.classList.add('dragging');
+            }, 400);
         }, { passive: true });
 
         document.addEventListener('touchmove', (e) => {
+            if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
             if (!touchDragData || !touchGhost) return;
             e.preventDefault();
 
             const touch = e.touches[0];
             touchGhost.style.left = (touch.clientX - touchGhost.offsetWidth / 2) + 'px';
-            touchGhost.style.top = (touch.clientY - 20) + 'px';
+            touchGhost.style.top = (touch.clientY - 30) + 'px';
 
-            // Highlight drop zone under finger
             const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const dropZone = elemBelow?.closest('.meal-plan-day-recipes');
 
             document.querySelectorAll('.meal-plan-day-recipes.drag-over').forEach(el => {
                 if (el !== dropZone) el.classList.remove('drag-over');
             });
-            if (dropZone) {
-                dropZone.classList.add('drag-over');
-            }
+            if (dropZone) dropZone.classList.add('drag-over');
         }, { passive: false });
 
         document.addEventListener('touchend', (e) => {
+            if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
             if (!touchDragData) return;
 
-            // Find drop zone
             const touch = e.changedTouches[0];
             const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const dropZone = elemBelow?.closest('.meal-plan-day-recipes');
@@ -3821,17 +3825,9 @@
                 showToast('Recipe moved!');
             }
 
-            // Cleanup
-            document.querySelectorAll('.meal-plan-day-recipes.drag-over').forEach(el => {
-                el.classList.remove('drag-over');
-            });
-            if (touchDragEl) {
-                touchDragEl.classList.remove('dragging');
-                touchDragEl.style.opacity = '';
-            }
-            if (touchGhost && touchGhost.parentNode) {
-                touchGhost.parentNode.removeChild(touchGhost);
-            }
+            document.querySelectorAll('.meal-plan-day-recipes.drag-over').forEach(el => el.classList.remove('drag-over'));
+            if (touchDragEl) { touchDragEl.classList.remove('dragging'); touchDragEl.style.opacity = ''; }
+            if (touchGhost && touchGhost.parentNode) touchGhost.parentNode.removeChild(touchGhost);
             touchDragData = null;
             touchDragEl = null;
             touchGhost = null;
