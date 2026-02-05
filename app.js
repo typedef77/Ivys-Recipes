@@ -1358,15 +1358,10 @@
         elements.contentTitle.textContent = titleText;
         elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
-        // Show/hide meal plan actions and view toggle
+        // Show/hide meal plan actions
         const isViewingMealPlan = currentFilter.startsWith('mealplan:');
         if (elements.mealPlanActions) {
             elements.mealPlanActions.hidden = !isViewingMealPlan;
-        }
-        // Hide view toggle on meal plan page (meal plan has its own layout)
-        const viewToggle = document.querySelector('.view-toggle');
-        if (viewToggle) {
-            viewToggle.style.display = isViewingMealPlan ? 'none' : '';
         }
 
         elements.recipeGrid.innerHTML = '';
@@ -1380,6 +1375,8 @@
             if (plan) {
                 elements.recipeGrid.innerHTML = renderMealPlanWeeklyView(plan);
                 elements.recipeGrid.classList.remove('bulk-select-mode');
+                // Re-apply current view mode (list or grid)
+                elements.recipeGrid.classList.toggle('list-view', currentViewMode === 'list');
 
                 // Set up click handlers for recipe cards in weekly view
                 elements.recipeGrid.querySelectorAll('.meal-plan-recipe-card').forEach(item => {

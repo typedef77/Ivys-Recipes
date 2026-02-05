@@ -746,6 +746,49 @@ h1, h2, h3, h4 {
     color: white;
 }
 
+/* Meal plan list view */
+.recipe-grid.list-view .meal-plan-day-recipes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.recipe-grid.list-view .meal-plan-day-recipes.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recipe-grid.list-view .meal-plan-recipe-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.recipe-grid.list-view .meal-plan-recipe-card-image {
+    width: 80px;
+    min-width: 80px;
+    height: 60px;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.recipe-grid.list-view .meal-plan-recipe-card-title {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    -webkit-line-clamp: 1;
+}
+
+.recipe-grid.list-view .meal-plan-recipe-card-remove {
+    position: static;
+    opacity: 0;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+}
+
+.recipe-grid.list-view .meal-plan-recipe-card:hover .meal-plan-recipe-card-remove {
+    opacity: 1;
+}
+
 /* Touch drag ghost */
 .touch-drag-ghost {
     border-radius: var(--radius-md);
