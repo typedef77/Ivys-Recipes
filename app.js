@@ -1060,6 +1060,8 @@
         sidebarTags: document.getElementById('sidebar-tags'),
         sidebarFolders: document.getElementById('sidebar-folders'),
         countAll: document.getElementById('count-all'),
+        countRecent: document.getElementById('count-recent'),
+        countFavorites: document.getElementById('count-favorites'),
         contentTitle: document.getElementById('content-title'),
         recipeCount: document.getElementById('recipe-count'),
         btnAddFolder: document.getElementById('btn-add-folder'),
@@ -1339,6 +1341,14 @@
 
         elements.countAll.textContent = recipes.length;
 
+        // Update sidebar counters for Recently Added and Favorites
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const recentCount = recipes.filter(r => new Date(r.createdAt) >= oneWeekAgo).length;
+        const favoritesCount = recipes.filter(r => r.favorite).length;
+        if (elements.countRecent) elements.countRecent.textContent = recentCount;
+        if (elements.countFavorites) elements.countFavorites.textContent = favoritesCount;
+
         let titleText = 'All Recipes';
         if (currentFilter === 'recent') {
             titleText = 'Recently Added';
@@ -1358,10 +1368,10 @@
         elements.contentTitle.textContent = titleText;
         elements.recipeCount.textContent = `${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}`;
 
-        // Show/hide meal plan actions
+        // Show/hide meal plan actions (only for Ivy when viewing a meal plan)
         const isViewingMealPlan = currentFilter.startsWith('mealplan:');
         if (elements.mealPlanActions) {
-            elements.mealPlanActions.hidden = !isViewingMealPlan;
+            elements.mealPlanActions.hidden = !isViewingMealPlan || !isIvy;
         }
 
         elements.recipeGrid.innerHTML = '';
@@ -3689,22 +3699,22 @@
                                 <span class="meal-plan-day-name">${dayNames[day]}</span>
                                 <div class="meal-plan-day-header-right">
                                     <span class="meal-plan-day-count">${dayRecipes.length} recipe${dayRecipes.length !== 1 ? 's' : ''}</span>
-                                    <button class="meal-plan-add-recipe-btn" data-day="${day}" data-plan-id="${plan.id}" title="Add recipe">
+                                    ${isIvy ? `<button class="meal-plan-add-recipe-btn" data-day="${day}" data-plan-id="${plan.id}" title="Add recipe">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                             <path d="M12 5v14M5 12h14"></path>
                                         </svg>
-                                    </button>
+                                    </button>` : ''}
                                 </div>
                             </div>
                             <div class="meal-plan-day-recipes ${dayRecipes.length === 0 ? 'empty' : ''}" data-day="${day}" data-plan-id="${plan.id}">
-                                ${dayRecipes.length === 0 ? '<span class="meal-plan-empty-text">Drop recipes here</span>' : dayRecipes.map(recipe => {
+                                ${dayRecipes.length === 0 ? `<span class="meal-plan-empty-text">${isIvy ? 'Drop recipes here' : 'No recipes'}</span>` : dayRecipes.map(recipe => {
                                     return `
-                                        <div class="meal-plan-recipe-card" draggable="true" data-recipe-id="${recipe.id}" data-day="${day}">
-                                            <button class="meal-plan-recipe-card-remove" data-recipe-id="${recipe.id}" data-day="${day}" title="Remove">
+                                        <div class="meal-plan-recipe-card" draggable="${isIvy}" data-recipe-id="${recipe.id}" data-day="${day}">
+                                            ${isIvy ? `<button class="meal-plan-recipe-card-remove" data-recipe-id="${recipe.id}" data-day="${day}" title="Remove">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                                     <path d="M18 6 6 18M6 6l12 12"></path>
                                                 </svg>
-                                            </button>
+                                            </button>` : ''}
                                             <div class="meal-plan-recipe-card-image">
                                                 ${recipe.image
                                                     ? `<img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" draggable="false">`
@@ -5067,6 +5077,9 @@
         // Update UI based on whether user is Ivy or not
         const addRecipeBtn = document.getElementById('btn-add-recipe');
         const addFolderBtn = document.getElementById('btn-add-folder');
+        const addMealPlanBtn = document.getElementById('btn-add-meal-plan');
+        const bulkSelectBtn = document.getElementById('btn-bulk-select');
+        const mealPlanActions = document.getElementById('meal-plan-actions');
 
         if (!isIvy) {
             // Change "Add Recipe" to "Suggest Recipe" for non-Ivy users
@@ -5082,6 +5095,18 @@
             if (addFolderBtn) {
                 addFolderBtn.style.display = 'none';
             }
+            // Hide add meal plan button for non-Ivy users
+            if (addMealPlanBtn) {
+                addMealPlanBtn.style.display = 'none';
+            }
+            // Hide bulk select button for non-Ivy users (they can't delete or organize)
+            if (bulkSelectBtn) {
+                bulkSelectBtn.style.display = 'none';
+            }
+            // Hide meal plan actions (rename, copy ingredients) for non-Ivy users
+            if (mealPlanActions) {
+                mealPlanActions.style.display = 'none';
+            }
         } else {
             if (addRecipeBtn) {
                 addRecipeBtn.innerHTML = `
@@ -5093,6 +5118,15 @@
             }
             if (addFolderBtn) {
                 addFolderBtn.style.display = '';
+            }
+            if (addMealPlanBtn) {
+                addMealPlanBtn.style.display = '';
+            }
+            if (bulkSelectBtn) {
+                bulkSelectBtn.style.display = '';
+            }
+            if (mealPlanActions) {
+                mealPlanActions.style.display = '';
             }
         }
 
