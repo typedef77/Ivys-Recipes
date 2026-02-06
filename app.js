@@ -1341,11 +1341,16 @@
 
         elements.countAll.textContent = recipes.length;
 
-        // Update sidebar counters for Recently Added and Favorites
+        // Update sidebar counters for Recently Added and Favorites (use ALL recipes, not filtered)
+        const allRecipes = getRecipes();
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        const recentCount = recipes.filter(r => new Date(r.createdAt) >= oneWeekAgo).length;
-        const favoritesCount = recipes.filter(r => r.favorite).length;
+        const recentCount = allRecipes.filter(r => {
+            if (!r.createdAt) return false;
+            const created = new Date(r.createdAt);
+            return !isNaN(created.getTime()) && created >= oneWeekAgo;
+        }).length;
+        const favoritesCount = allRecipes.filter(r => r.favorite).length;
         if (elements.countRecent) elements.countRecent.textContent = recentCount;
         if (elements.countFavorites) elements.countFavorites.textContent = favoritesCount;
 
