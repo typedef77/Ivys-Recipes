@@ -471,15 +471,12 @@ h1, h2, h3, h4 {
 
 .sidebar-item-count {
     margin-left: auto;
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--color-secondary);
-    background-color: var(--color-primary-light);
-    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    background-color: var(--color-cream);
+    padding: 0.125rem 0.5rem;
     border-radius: 10px;
     flex-shrink: 0;
-    min-width: 1.5rem;
-    text-align: center;
 }
 
 .sidebar-tags {
@@ -663,7 +660,7 @@ h1, h2, h3, h4 {
     outline-offset: -4px;
 }
 
-/* Recipe items inside meal plan days - horizontal row */
+/* Recipe items inside meal plan days */
 .meal-plan-recipe-card {
     position: relative;
     background: white;
@@ -676,7 +673,7 @@ h1, h2, h3, h4 {
     -webkit-user-select: none;
     display: flex;
     flex-direction: column;
-    width: 240px;
+    width: 120px;
     flex-shrink: 0;
 }
 
@@ -692,7 +689,7 @@ h1, h2, h3, h4 {
 
 .meal-plan-recipe-card-image {
     width: 100%;
-    height: 180px;
+    height: 80px;
     background: var(--color-cream);
     display: flex;
     align-items: center;
@@ -710,27 +707,29 @@ h1, h2, h3, h4 {
 }
 
 .meal-plan-recipe-card-image svg {
-    width: 48px;
-    height: 48px;
+    width: 24px;
+    height: 24px;
 }
 
 .meal-plan-recipe-card-title {
-    padding: 0.75rem;
-    font-size: 0.9rem;
+    padding: 0.5rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--color-secondary);
-    line-height: 1.3;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+    line-height: 1.2;
     text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .meal-plan-recipe-card-remove {
     position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    width: 24px;
-    height: 24px;
+    top: 0.25rem;
+    right: 0.25rem;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
