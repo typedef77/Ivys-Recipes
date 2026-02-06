@@ -473,10 +473,12 @@ h1, h2, h3, h4 {
     margin-left: auto;
     font-size: 0.75rem;
     color: var(--color-text-muted);
-    background-color: var(--color-cream);
-    padding: 0.125rem 0.5rem;
-    border-radius: 10px;
     flex-shrink: 0;
+}
+
+.sidebar-item.active .sidebar-item-count {
+    color: white;
+}
 }
 
 .sidebar-tags {
