@@ -1400,8 +1400,23 @@
                             const recipeId = item.dataset.recipeId;
                             const recipe = getRecipeById(recipeId);
                             if (recipe) {
-                                openViewModal(recipe);
+                                // Allow ctrl+click, cmd+click to open in new tab
+                                if (e.ctrlKey || e.metaKey) {
+                                    const recipeUrl = `${window.location.pathname}?recipe=${recipeId}`;
+                                    window.open(recipeUrl, '_blank');
+                                } else {
+                                    openViewModal(recipe);
+                                }
                             }
+                        }
+                    });
+                    // Middle-click to open in new tab
+                    item.addEventListener('auxclick', (e) => {
+                        if (e.button === 1 && !e.target.closest('.meal-plan-recipe-card-remove')) {
+                            e.preventDefault();
+                            const recipeId = item.dataset.recipeId;
+                            const recipeUrl = `${window.location.pathname}?recipe=${recipeId}`;
+                            window.open(recipeUrl, '_blank');
                         }
                     });
                 });
