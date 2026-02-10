@@ -106,32 +106,44 @@
         try {
             const recipesRef = database.ref('recipes');
             const foldersRef = database.ref('folders');
-            const mealPlansRef = database.ref('mealPlans');
 
-            const [recipesSnapshot, foldersSnapshot, mealPlansSnapshot] = await Promise.all([
+            const [recipesSnapshot, foldersSnapshot] = await Promise.all([
                 recipesRef.once('value'),
-                foldersRef.once('value'),
-                mealPlansRef.once('value')
+                foldersRef.once('value')
             ]);
 
             const recipesData = recipesSnapshot.val();
             const foldersData = foldersSnapshot.val();
-            const mealPlansData = mealPlansSnapshot.val();
 
             cloudRecipes = recipesData ? Object.values(recipesData) : [];
             cloudFolders = foldersData ? Object.values(foldersData) : [];
-            cloudMealPlans = mealPlansData ? Object.values(mealPlansData) : [];
 
             // Also save to local storage as cache
             localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudRecipes));
             localStorage.setItem(FOLDERS_KEY, JSON.stringify(cloudFolders));
-            localStorage.setItem(MEAL_PLANS_KEY, JSON.stringify(cloudMealPlans));
+
+            // Load meal plans separately (may fail due to permissions)
+            try {
+                const mealPlansSnapshot = await database.ref('mealPlans').once('value');
+                const mealPlansData = mealPlansSnapshot.val();
+                cloudMealPlans = mealPlansData ? Object.values(mealPlansData) : [];
+                localStorage.setItem(MEAL_PLANS_KEY, JSON.stringify(cloudMealPlans));
+            } catch (mpError) {
+                console.warn('Could not load meal plans from cloud:', mpError.message);
+                // Use local meal plans as fallback
+                const localMealPlans = localStorage.getItem(MEAL_PLANS_KEY);
+                cloudMealPlans = localMealPlans ? JSON.parse(localMealPlans) : [];
+            }
 
             lastSyncTime = Date.now();
             console.log('Loaded from cloud:', cloudRecipes.length, 'recipes,', cloudMealPlans.length, 'meal plans');
             return true;
         } catch (e) {
             console.error('Error loading from cloud:', e);
+            // Initialize to empty arrays to prevent null errors
+            cloudRecipes = cloudRecipes || [];
+            cloudFolders = cloudFolders || [];
+            cloudMealPlans = cloudMealPlans || [];
             return false;
         }
     }
@@ -5545,7 +5557,7 @@
             const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
 
             // If cloud is empty but we have local recipes, sync them to cloud
-            if (cloudRecipes.length === 0 && localRecipes.length > 0) {
+            if (cloudRecipes && cloudRecipes.length === 0 && localRecipes.length > 0) {
                 console.log('Cloud is empty but found local recipes. Syncing to cloud...');
                 await syncLocalToCloud();
                 // Reload from cloud to update cloudRecipes
