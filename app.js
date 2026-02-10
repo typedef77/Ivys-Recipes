@@ -106,24 +106,29 @@
         try {
             const recipesRef = database.ref('recipes');
             const foldersRef = database.ref('folders');
+            const mealPlansRef = database.ref('mealPlans');
 
-            const [recipesSnapshot, foldersSnapshot] = await Promise.all([
+            const [recipesSnapshot, foldersSnapshot, mealPlansSnapshot] = await Promise.all([
                 recipesRef.once('value'),
-                foldersRef.once('value')
+                foldersRef.once('value'),
+                mealPlansRef.once('value')
             ]);
 
             const recipesData = recipesSnapshot.val();
             const foldersData = foldersSnapshot.val();
+            const mealPlansData = mealPlansSnapshot.val();
 
             cloudRecipes = recipesData ? Object.values(recipesData) : [];
             cloudFolders = foldersData ? Object.values(foldersData) : [];
+            cloudMealPlans = mealPlansData ? Object.values(mealPlansData) : [];
 
             // Also save to local storage as cache
             localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudRecipes));
             localStorage.setItem(FOLDERS_KEY, JSON.stringify(cloudFolders));
+            localStorage.setItem(MEAL_PLANS_KEY, JSON.stringify(cloudMealPlans));
 
             lastSyncTime = Date.now();
-            console.log('Loaded from cloud:', cloudRecipes.length, 'recipes');
+            console.log('Loaded from cloud:', cloudRecipes.length, 'recipes,', cloudMealPlans.length, 'meal plans');
             return true;
         } catch (e) {
             console.error('Error loading from cloud:', e);
@@ -183,22 +188,37 @@
 
         try {
             console.log('Starting sync of local data to cloud...');
-            showToast('Syncing recipes to cloud...');
+            showToast('Syncing to cloud...');
 
             // Get local data
             const localRecipesData = localStorage.getItem(STORAGE_KEY);
             const localFoldersData = localStorage.getItem(FOLDERS_KEY);
+            const localMealPlansData = localStorage.getItem(MEAL_PLANS_KEY);
 
             const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
             const localFolders = localFoldersData ? JSON.parse(localFoldersData) : [];
+            const localMealPlans = localMealPlansData ? JSON.parse(localMealPlansData) : [];
 
             // Upload to cloud
             const recipesSuccess = await saveToCloud(localRecipes);
             const foldersSuccess = await saveFoldersToCloud(localFolders);
 
-            if (recipesSuccess && foldersSuccess) {
-                console.log(`Successfully synced ${localRecipes.length} recipes and ${localFolders.length} folders to cloud`);
-                showToast(`Synced ${localRecipes.length} recipes to cloud!`);
+            // Sync meal plans to cloud
+            let mealPlansSuccess = true;
+            if (localMealPlans.length > 0) {
+                try {
+                    const mealPlansObj = {};
+                    localMealPlans.forEach(mp => { mealPlansObj[mp.id] = mp; });
+                    await database.ref('mealPlans').set(mealPlansObj);
+                } catch (e) {
+                    console.error('Error syncing meal plans to cloud:', e);
+                    mealPlansSuccess = false;
+                }
+            }
+
+            if (recipesSuccess && foldersSuccess && mealPlansSuccess) {
+                console.log(`Successfully synced ${localRecipes.length} recipes, ${localFolders.length} folders, and ${localMealPlans.length} meal plans to cloud`);
+                showToast(`Synced to cloud!`);
                 return true;
             } else {
                 throw new Error('Failed to sync some data');
