@@ -5546,30 +5546,37 @@
             elements.recipeGrid.innerHTML = '<div class="loading-indicator">Loading recipes...</div>';
         }
 
-        // Try to load from cloud first
-        if (firebaseInitialized) {
-            await loadFromCloud();
-            setupCloudListeners();
-            initCloudSyncButton();
-
-            // Check if we need to sync local data to cloud
-            const localRecipesData = localStorage.getItem(STORAGE_KEY);
-            const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
-
-            // If cloud is empty but we have local recipes, sync them to cloud
-            if (cloudRecipes && cloudRecipes.length === 0 && localRecipes.length > 0) {
-                console.log('Cloud is empty but found local recipes. Syncing to cloud...');
-                await syncLocalToCloud();
-                // Reload from cloud to update cloudRecipes
+        // Try to load from cloud first (wrapped in try-catch to ensure app still works if cloud fails)
+        try {
+            if (firebaseInitialized) {
                 await loadFromCloud();
-            }
+                setupCloudListeners();
+                initCloudSyncButton();
 
-            // Photo migration disabled - photos now stored as compressed base64 directly with recipe data
-        } else {
-            // Firebase failed to initialize, show offline status
-            initCloudSyncButton();
+                // Check if we need to sync local data to cloud
+                const localRecipesData = localStorage.getItem(STORAGE_KEY);
+                const localRecipes = localRecipesData ? JSON.parse(localRecipesData) : [];
+
+                // If cloud is empty but we have local recipes, sync them to cloud
+                if (cloudRecipes && cloudRecipes.length === 0 && localRecipes.length > 0) {
+                    console.log('Cloud is empty but found local recipes. Syncing to cloud...');
+                    await syncLocalToCloud();
+                    // Reload from cloud to update cloudRecipes
+                    await loadFromCloud();
+                }
+            } else {
+                // Firebase failed to initialize, show offline status
+                initCloudSyncButton();
+            }
+        } catch (e) {
+            console.error('Error during cloud initialization:', e);
+            // Ensure we have fallback data
+            cloudRecipes = cloudRecipes || [];
+            cloudFolders = cloudFolders || [];
+            cloudMealPlans = cloudMealPlans || [];
         }
 
+        // Always set up the UI and event listeners, even if cloud sync failed
         renderRecipes();
         renderTagsFilter();
         renderFolders();
