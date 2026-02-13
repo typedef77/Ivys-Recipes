@@ -5539,7 +5539,12 @@
         const hasAuthed = checkAuth();
 
         // Initialize Firebase for cloud sync
-        const firebaseInitialized = initFirebase();
+        let firebaseInitialized = false;
+        try {
+            firebaseInitialized = initFirebase();
+        } catch (e) {
+            console.error('Firebase init error:', e);
+        }
 
         // Show loading indicator
         if (elements.recipeGrid) {
@@ -5561,40 +5566,44 @@
                 if (cloudRecipes && cloudRecipes.length === 0 && localRecipes.length > 0) {
                     console.log('Cloud is empty but found local recipes. Syncing to cloud...');
                     await syncLocalToCloud();
-                    // Reload from cloud to update cloudRecipes
                     await loadFromCloud();
                 }
             } else {
-                // Firebase failed to initialize, show offline status
                 initCloudSyncButton();
             }
         } catch (e) {
             console.error('Error during cloud initialization:', e);
-            // Ensure we have fallback data
             cloudRecipes = cloudRecipes || [];
             cloudFolders = cloudFolders || [];
             cloudMealPlans = cloudMealPlans || [];
         }
 
-        // Always set up the UI and event listeners, even if cloud sync failed
-        renderRecipes();
-        renderTagsFilter();
-        renderFolders();
-        renderMealPlans();
-        setupEventListeners();
-        setupBookmarklet();
-        setupAuthOverlay();
-        setupCollapsibleSections();
-        loadViewModePreference();
-        checkUrlParams();
-        handleSharedFiles();
-        registerServiceWorker();
+        // Render UI - wrap each in try-catch so one failure doesn't break everything
+        try { renderRecipes(); } catch (e) { console.error('renderRecipes error:', e); }
+        try { renderTagsFilter(); } catch (e) { console.error('renderTagsFilter error:', e); }
+        try { renderFolders(); } catch (e) { console.error('renderFolders error:', e); }
+        try { renderMealPlans(); } catch (e) { console.error('renderMealPlans error:', e); }
+
+        // CRITICAL: Always set up event listeners
+        try {
+            setupEventListeners();
+        } catch (e) {
+            console.error('CRITICAL: setupEventListeners error:', e);
+        }
+
+        try { setupBookmarklet(); } catch (e) { console.error('setupBookmarklet error:', e); }
+        try { setupAuthOverlay(); } catch (e) { console.error('setupAuthOverlay error:', e); }
+        try { setupCollapsibleSections(); } catch (e) { console.error('setupCollapsibleSections error:', e); }
+        try { loadViewModePreference(); } catch (e) { console.error('loadViewModePreference error:', e); }
+        try { checkUrlParams(); } catch (e) { console.error('checkUrlParams error:', e); }
+        try { handleSharedFiles(); } catch (e) { console.error('handleSharedFiles error:', e); }
+        try { registerServiceWorker(); } catch (e) { console.error('registerServiceWorker error:', e); }
 
         // Show auth overlay if never authed before
         if (!hasAuthed) {
-            showAuthOverlay();
+            try { showAuthOverlay(); } catch (e) { console.error('showAuthOverlay error:', e); }
         } else {
-            updateUIForAuth();
+            try { updateUIForAuth(); } catch (e) { console.error('updateUIForAuth error:', e); }
         }
     }
 
