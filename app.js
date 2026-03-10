@@ -503,7 +503,7 @@
 
         const html = mealPlans.map(plan => {
             const isActive = currentFilter === `mealplan:${plan.id}`;
-            const totalRecipes = Object.values(plan.days).reduce((sum, day) => sum + day.length, 0);
+            const totalRecipes = Object.values(plan.days || {}).reduce((sum, day) => sum + (day ? day.length : 0), 0);
             return `
                 <div class="sidebar-folder-item ${isActive ? 'active' : ''}">
                     <button class="sidebar-item" data-filter="mealplan:${plan.id}">
