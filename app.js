@@ -126,7 +126,7 @@
             try {
                 const mealPlansSnapshot = await database.ref('mealPlans').once('value');
                 const mealPlansData = mealPlansSnapshot.val();
-                cloudMealPlans = mealPlansData ? Object.values(mealPlansData) : [];
+                cloudMealPlans = mealPlansData ? Object.values(mealPlansData).map(normalizeMealPlan) : [];
                 localStorage.setItem(MEAL_PLANS_KEY, JSON.stringify(cloudMealPlans));
             } catch (mpError) {
                 console.warn('Could not load meal plans from cloud:', mpError.message);
@@ -270,7 +270,7 @@
 
         database.ref('mealPlans').on('value', (snapshot) => {
             const data = snapshot.val();
-            cloudMealPlans = data ? Object.values(data) : [];
+            cloudMealPlans = data ? Object.values(data).map(normalizeMealPlan) : [];
             localStorage.setItem(MEAL_PLANS_KEY, JSON.stringify(cloudMealPlans));
             if (Date.now() - lastSyncTime > 1000) {
                 renderMealPlans();
@@ -410,13 +410,31 @@
     // Meal Planning Management
     // ============================================
 
+    // Firebase serializes empty arrays as null on round-trip.
+    // This ensures every plan always has a valid days object with proper arrays.
+    function normalizeMealPlan(plan) {
+        const d = plan.days || {};
+        return {
+            ...plan,
+            days: {
+                monday:    Array.isArray(d.monday)    ? d.monday    : [],
+                tuesday:   Array.isArray(d.tuesday)   ? d.tuesday   : [],
+                wednesday: Array.isArray(d.wednesday) ? d.wednesday : [],
+                thursday:  Array.isArray(d.thursday)  ? d.thursday  : [],
+                friday:    Array.isArray(d.friday)    ? d.friday    : [],
+                saturday:  Array.isArray(d.saturday)  ? d.saturday  : [],
+                sunday:    Array.isArray(d.sunday)    ? d.sunday    : [],
+            }
+        };
+    }
+
     function getMealPlans() {
         try {
             if (cloudMealPlans !== null) {
                 return cloudMealPlans;
             }
             const data = localStorage.getItem(MEAL_PLANS_KEY);
-            return data ? JSON.parse(data) : [];
+            return data ? JSON.parse(data).map(normalizeMealPlan) : [];
         } catch (e) {
             console.error('Error reading meal plans:', e);
             return [];
@@ -5095,6 +5113,7 @@
                     hideAuthOverlay();
                     updateUIForAuth();
                     renderFolders();
+                    renderMealPlans();
                     showToast('hi bh (:');
                     // Check for new suggestions after a brief delay
                     setTimeout(checkForNewSuggestions, 500);
