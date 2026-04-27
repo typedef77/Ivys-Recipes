@@ -1455,7 +1455,7 @@
                                     const recipeUrl = `${window.location.pathname}?recipe=${recipeId}`;
                                     window.open(recipeUrl, '_blank');
                                 } else {
-                                    openViewModal(recipe);
+                                    openViewModal(recipeId);
                                 }
                             }
                         }
